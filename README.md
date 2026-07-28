@@ -12,6 +12,33 @@ A VST3/AudioUnit plug-in\* for [Neural Amp Modeler](https://github.com/sdatkinso
 To build the app or plugin, there are build scripts in [NeuralAmpModeler/scripts/](https://github.com/sdatkinson/NeuralAmpModelerPlugin/tree/main/NeuralAmpModeler/scripts).
 The [workflows](https://github.com/sdatkinson/NeuralAmpModelerPlugin/tree/main/.github/workflows) can show you how to do this.
 
+### Building Puke Amp VST3
+
+The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/NAM` and `Models/IR`.
+
+For local builds, first download the iPlug2 dependencies from a shell (use Git Bash on Windows):
+
+```sh
+(cd iPlug2/Dependencies/IPlug && ./download-iplug-sdks.sh)
+(cd iPlug2/Dependencies && ./download-prebuilt-libs.sh)
+```
+
+On macOS with Xcode installed:
+
+```sh
+NeuralAmpModeler/scripts/make-vst3-mac.sh
+```
+
+The development build is ad-hoc signed and written to `NeuralAmpModeler/build-vst3/mac/products/Puke Amp.vst3`, with a distributable ZIP beside the `products` directory.
+
+On Windows, run this from a Visual Studio Developer Command Prompt:
+
+```bat
+NeuralAmpModeler\scripts\make-vst3-win.bat
+```
+
+The 64-bit build and its distributable ZIP are written to `NeuralAmpModeler\build-vst3\windows`.
+
 ### Pre-built installers
 
 If you want a pre-built installer from this repo without having to , I've made "Gateway", a fork of this repo, availble at https://neuralampmodeler.com/users!
