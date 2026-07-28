@@ -267,7 +267,8 @@ public:
   NAMFileBrowserControl(const IRECT& bounds, int clearMsgTag, const char* labelStr, const char* fileExtension,
                         IFileDialogCompletionHandlerFunc ch, const IVStyle& style, const ISVG& loadSVG,
                         const ISVG& clearSVG, const ISVG& leftSVG, const ISVG& rightSVG, const IBitmap& bitmap,
-                        const ISVG& globeSVG, const char* getButtonLabel, const char* getButtonURL)
+                        const ISVG& globeSVG, const char* getButtonLabel, const char* getButtonURL,
+                        const char* bundledModelsSubdirectory)
   : IDirBrowseControlBase(bounds, fileExtension, false, false)
   , mClearMsgTag(clearMsgTag)
   , mDefaultLabelStr(labelStr)
@@ -281,6 +282,7 @@ public:
   , mGlobeSVG(globeSVG)
   , mGetButtonLabel(getButtonLabel)
   , mGetButtonURL(getButtonURL)
+  , mBundledModelsSubdirectory(bundledModelsSubdirectory)
   , mBrowserState(NAMBrowserState::Empty)
   {
     mIgnoreMouse = true;
@@ -304,6 +306,8 @@ public:
 
   void OnAttached() override
   {
+    AddBundledModelsPath();
+
     auto prevFileFunc = [&](IControl* pCaller) {
       const auto nItems = NItems();
       if (nItems == 0)
@@ -367,7 +371,7 @@ public:
     };
 
     auto chooseFileFunc = [&, loadFileFunc](IControl* pCaller) {
-      if (std::string_view(pCaller->As<IVButtonControl>()->GetLabelStr()) == mDefaultLabelStr.Get())
+      if (NItems() == 0)
       {
         loadFileFunc(pCaller);
       }
@@ -444,9 +448,18 @@ public:
         directory.remove_filepart(true);
 
         ClearPathList();
-        AddPath(directory.Get(), "");
+        const bool hasBundledModels = AddBundledModelsPath(false);
         SetupMenu();
         SetSelectedFile(fileName.Get());
+
+        if (mSelectedItemIndex == -1)
+        {
+          ClearPathList();
+          AddBundledModelsPath(false);
+          AddPath(directory.Get(), hasBundledModels ? "Imported" : "");
+          SetupMenu();
+          SetSelectedFile(fileName.Get());
+        }
         mFileNameControl->SetLabelAndTooltipEllipsizing(fileName);
         SetBrowserState(NAMBrowserState::Loaded);
       }
@@ -456,6 +469,64 @@ public:
   }
 
 private:
+  static bool DirectoryExists(const WDL_String& path)
+  {
+    if (!CStringHasContents(path.Get()))
+      return false;
+
+    WDL_DirScan scan;
+    return scan.First(path.Get()) == 0;
+  }
+
+  static void AppendPathComponent(WDL_String& path, const char* component)
+  {
+    if (!CStringHasContents(path.Get()) || !CStringHasContents(component))
+      return;
+
+    if (!WDL_IS_DIRCHAR(path.Get()[path.GetLength() - 1]))
+      path.Append(WDL_DIRCHAR_STR);
+    path.Append(component);
+  }
+
+  bool ResolveBundledModelsPath(WDL_String& path)
+  {
+    path.Set("");
+    if (!CStringHasContents(mBundledModelsSubdirectory.Get()) || GetUI() == nullptr)
+      return false;
+
+    BundleResourcePath(path,
+#ifdef OS_WIN
+                       static_cast<PluginIDType>(GetUI()->GetWinModuleHandle())
+#elif defined OS_MAC || defined OS_IOS
+                       GetUI()->GetBundleID()
+#else
+                       nullptr
+#endif
+    );
+
+    if (!CStringHasContents(path.Get()))
+    {
+#ifdef OS_WIN
+      PluginPath(path, static_cast<PluginIDType>(GetUI()->GetWinModuleHandle()));
+#endif
+    }
+
+    AppendPathComponent(path, "Models");
+    AppendPathComponent(path, mBundledModelsSubdirectory.Get());
+    return DirectoryExists(path);
+  }
+
+  bool AddBundledModelsPath(bool setupMenu = true)
+  {
+    if (!ResolveBundledModelsPath(mBundledModelsPath))
+      return false;
+
+    AddPath(mBundledModelsPath.Get(), "Bundled");
+    if (setupMenu)
+      SetupMenu();
+    return true;
+  }
+
   void SelectFirstFile() { mSelectedItemIndex = mFiles.GetSize() ? 0 : -1; }
 
   void GetSelectedFileDirectory(WDL_String& path)
@@ -494,6 +565,8 @@ private:
   // new members for the "Get" button
   const char* mGetButtonLabel;
   const char* mGetButtonURL;
+  WDL_String mBundledModelsSubdirectory;
+  WDL_String mBundledModelsPath;
   NAMBrowserState mBrowserState;
   NAMSquareButtonControl* mClearButton = nullptr;
   NAMGetButtonControl* mGetButton = nullptr;

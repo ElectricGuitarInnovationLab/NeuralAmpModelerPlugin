@@ -26,7 +26,7 @@ def main():
     )
 
     CFBundleGetInfoString = (
-        config["BUNDLE_NAME"]
+        config["PLUG_NAME"]
         + " v"
         + config["FULL_VER_STR"]
         + " "
@@ -44,7 +44,7 @@ def main():
     plistpath = projectpath + "/resources/" + config["BUNDLE_NAME"] + "-VST3-Info.plist"
     with open(plistpath, "rb") as f:
         vst3 = plistlib.load(f)
-        vst3["CFBundleExecutable"] = config["BUNDLE_NAME"]
+        vst3["CFBundleExecutable"] = config["PLUG_NAME"]
         vst3["CFBundleGetInfoString"] = CFBundleGetInfoString
         vst3["CFBundleIdentifier"] = (
             config["BUNDLE_DOMAIN"]
@@ -54,7 +54,7 @@ def main():
             + config["BUNDLE_NAME"]
             + ""
         )
-        vst3["CFBundleName"] = config["BUNDLE_NAME"]
+        vst3["CFBundleName"] = config["PLUG_NAME"]
         vst3["CFBundleVersion"] = CFBundleVersion
         vst3["CFBundleShortVersionString"] = CFBundleVersion
         vst3["LSMinimumSystemVersion"] = LSMinimumSystemVersion

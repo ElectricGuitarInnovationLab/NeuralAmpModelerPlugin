@@ -1,5 +1,5 @@
 [Setup]
-AppName=NeuralAmpModeler
+AppName=Puke Amp
 AppContact=neuralampmodeler@gmail.com
 AppCopyright=Copyright (C) 2022 Steven Atkinson
 AppPublisher=Steven Atkinson
@@ -7,13 +7,13 @@ AppPublisherURL=https://www.neuralampmodeler.com/
 AppSupportURL=https://www.neuralampmodeler.com/
 AppVersion=0.7.15
 VersionInfoVersion=0.7.15
-DefaultDirName={pf}\NeuralAmpModeler
-DefaultGroupName=NeuralAmpModeler
+DefaultDirName={pf}\Puke Amp
+DefaultGroupName=Puke Amp
 Compression=lzma2
 SolidCompression=yes
 OutputDir=.\..\build-win\installer
 ArchitecturesInstallIn64BitMode=x64
-OutputBaseFilename=NeuralAmpModeler Installer
+OutputBaseFilename=Puke Amp Installer
 LicenseFile=license.rtf
 SetupLogging=yes
 ShowComponentSizes=no
@@ -25,8 +25,8 @@ Name: "full"; Description: "Full installation"
 Name: "custom"; Description: "Custom installation"; Flags: iscustom
 
 [Messages]
-WelcomeLabel1=Welcome to the NeuralAmpModeler installer
-SetupWindowTitle=NeuralAmpModeler installer
+WelcomeLabel1=Welcome to the Puke Amp installer
+SetupWindowTitle=Puke Amp installer
 SelectDirLabel3=The standalone application and supporting files will be installed in the following folder.
 SelectDirBrowseLabel=To continue, click Next. If you would like to select a different folder (not recommended), click Browse.
 
@@ -43,27 +43,27 @@ Name: "manual"; Description: "User guide"; Types: full custom; Flags: fixed
 [Dirs] 
 ;Name: "{cf32}\Avid\Audio\Plug-Ins\NeuralAmpModeler.aaxplugin\"; Attribs: readonly; Components:aax_32; 
 ;Name: "{cf64}\Avid\Audio\Plug-Ins\NeuralAmpModeler.aaxplugin\"; Attribs: readonly; Check: Is64BitInstallMode; Components:aax_64; 
-;Name: "{cf32}\VST3\NeuralAmpModeler.vst3\"; Attribs: readonly; Components:vst3_32; 
-Name: "{cf64}\VST3\NeuralAmpModeler.vst3\"; Attribs: readonly; Check: Is64BitInstallMode; Components:vst3_64; 
+;Name: "{cf32}\VST3\Puke Amp.vst3\"; Attribs: readonly; Components:vst3_32;
+Name: "{cf64}\VST3\Puke Amp.vst3\"; Attribs: readonly; Check: Is64BitInstallMode; Components:vst3_64;
 
 [Files]
 ;Source: "..\build-win\NeuralAmpModeler_Win32.exe"; DestDir: "{app}"; Check: not Is64BitInstallMode; Components:app; Flags: ignoreversion;
-Source: "..\build-win\NeuralAmpModeler_x64.exe"; DestDir: "{app}"; Check: Is64BitInstallMode; Components:app; Flags: ignoreversion;
+Source: "..\build-win\Puke Amp_x64.exe"; DestDir: "{app}"; Check: Is64BitInstallMode; Components:app; Flags: ignoreversion;
 Source: "ThirdPartyNotices.txt"; DestDir: "{app}"; Components:app; Flags: ignoreversion;
 
 ;Source: "..\build-win\NeuralAmpModeler_Win32.dll"; DestDir: {code:GetVST2Dir_32}; Check: not Is64BitInstallMode; Components:vst2_32; Flags: ignoreversion;
 ;Source: "..\build-win\NeuralAmpModeler_Win32.dll"; DestDir: {code:GetVST2Dir_32}; Check: Is64BitInstallMode; Components:vst2_32; Flags: ignoreversion;
 ;Source: "..\build-win\NeuralAmpModeler_x64.dll"; DestDir: {code:GetVST2Dir_64}; Check: Is64BitInstallMode; Components:vst2_64; Flags: ignoreversion;
 
-;Source: "..\build-win\NeuralAmpModeler.vst3\*.*"; Excludes: "\Contents\x86_64\*,*.pdb,*.exp,*.lib,*.ilk,*.ico,*.ini"; DestDir: "{cf32}\VST3\NeuralAmpModeler.vst3\"; Components:vst3_32; Flags: ignoreversion recursesubdirs;
-;Source: "..\build-win\NeuralAmpModeler.vst3\Desktop.ini"; DestDir: "{cf32}\VST3\NeuralAmpModeler.vst3\"; Components:vst3_32; Flags: overwritereadonly ignoreversion; Attribs: hidden system;
-;Source: "..\build-win\NeuralAmpModeler.vst3\PlugIn.ico"; DestDir: "{cf32}\VST3\NeuralAmpModeler.vst3\"; Components:vst3_32; Flags: overwritereadonly ignoreversion; Attribs: hidden system;
+;Source: "..\build-win\Puke Amp.vst3\*.*"; Excludes: "\Contents\x86_64\*,*.pdb,*.exp,*.lib,*.ilk,*.ico,*.ini"; DestDir: "{cf32}\VST3\Puke Amp.vst3\"; Components:vst3_32; Flags: ignoreversion recursesubdirs;
+;Source: "..\build-win\Puke Amp.vst3\Desktop.ini"; DestDir: "{cf32}\VST3\Puke Amp.vst3\"; Components:vst3_32; Flags: overwritereadonly ignoreversion; Attribs: hidden system;
+;Source: "..\build-win\Puke Amp.vst3\PlugIn.ico"; DestDir: "{cf32}\VST3\Puke Amp.vst3\"; Components:vst3_32; Flags: overwritereadonly ignoreversion; Attribs: hidden system;
 
 ; 64-bit install: exclude 32-bit arch folder only (iPlug uses x86-win / x86_64-win, not "x86").
-Source: "..\build-win\NeuralAmpModeler.vst3\*.*"; Excludes: "\Contents\x86-win\*,*.pdb,*.exp,*.lib,*.ilk,*.ico,*.ini"; DestDir: "{cf64}\VST3\NeuralAmpModeler.vst3\"; Check: Is64BitInstallMode; Components:vst3_64; Flags: ignoreversion recursesubdirs;
-Source: "..\build-win\NeuralAmpModeler.vst3\Desktop.ini"; DestDir: "{cf64}\VST3\NeuralAmpModeler.vst3\"; Check: Is64BitInstallMode; Components:vst3_64; Flags: overwritereadonly ignoreversion; Attribs: hidden system;
-Source: "..\build-win\NeuralAmpModeler.vst3\PlugIn.ico"; DestDir: "{cf64}\VST3\NeuralAmpModeler.vst3\"; Check: Is64BitInstallMode; Components:vst3_64; Flags: overwritereadonly ignoreversion; Attribs: hidden system;
-Source: "ThirdPartyNotices.txt"; DestDir: "{cf64}\VST3\NeuralAmpModeler.vst3\Contents\Resources"; Check: Is64BitInstallMode; Components:vst3_64; Flags: ignoreversion;
+Source: "..\build-win\Puke Amp.vst3\*.*"; Excludes: "\Contents\x86-win\*,*.pdb,*.exp,*.lib,*.ilk,*.ico,*.ini"; DestDir: "{cf64}\VST3\Puke Amp.vst3\"; Check: Is64BitInstallMode; Components:vst3_64; Flags: ignoreversion recursesubdirs;
+Source: "..\build-win\Puke Amp.vst3\Desktop.ini"; DestDir: "{cf64}\VST3\Puke Amp.vst3\"; Check: Is64BitInstallMode; Components:vst3_64; Flags: overwritereadonly ignoreversion; Attribs: hidden system;
+Source: "..\build-win\Puke Amp.vst3\PlugIn.ico"; DestDir: "{cf64}\VST3\Puke Amp.vst3\"; Check: Is64BitInstallMode; Components:vst3_64; Flags: overwritereadonly ignoreversion; Attribs: hidden system;
+Source: "ThirdPartyNotices.txt"; DestDir: "{cf64}\VST3\Puke Amp.vst3\Contents\Resources"; Check: Is64BitInstallMode; Components:vst3_64; Flags: ignoreversion;
 
 ;Source: "..\build-win\aax\bin\NeuralAmpModeler.aaxplugin\*.*"; Excludes: "\Contents\x64\*,*.pdb,*.exp,*.lib,*.ilk,*.ico,*.ini"; DestDir: "{cf32}\Avid\Audio\Plug-Ins\NeuralAmpModeler.aaxplugin\"; Components:aax_32; Flags: ignoreversion recursesubdirs;
 ;Source: "..\build-win\aax\bin\NeuralAmpModeler.aaxplugin\Desktop.ini"; DestDir: "{cf32}\Avid\Audio\Plug-Ins\NeuralAmpModeler.aaxplugin\"; Components:aax_32; Flags: overwritereadonly ignoreversion; Attribs: hidden system;
@@ -78,11 +78,11 @@ Source: "changelog.txt"; DestDir: "{app}"
 Source: "readme-win.rtf"; DestDir: "{app}"; DestName: "readme.rtf"; Flags: isreadme
 
 [Icons]
-Name: "{group}\NeuralAmpModeler"; Filename: "{app}\NeuralAmpModeler_x64.exe"
+Name: "{group}\Puke Amp"; Filename: "{app}\Puke Amp_x64.exe"
 Name: "{group}\User guide"; Filename: "{app}\NeuralAmpModeler manual.pdf"
 Name: "{group}\Changelog"; Filename: "{app}\changelog.txt"
 ;Name: "{group}\readme"; Filename: "{app}\readme.rtf"
-Name: "{group}\Uninstall NeuralAmpModeler"; Filename: "{app}\unins000.exe"
+Name: "{group}\Uninstall Puke Amp"; Filename: "{app}\unins000.exe"
 
 [Code]
 var

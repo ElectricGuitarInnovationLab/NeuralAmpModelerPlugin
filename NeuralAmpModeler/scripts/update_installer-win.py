@@ -38,7 +38,7 @@ def main():
 
     config = parse_config(projectpath)
     bundle_name = config["BUNDLE_NAME"]
-    display_name = env_or_default("INSTALLER_DISPLAY_NAME", bundle_name)
+    display_name = env_or_default("INSTALLER_DISPLAY_NAME", config["PLUG_NAME"])
     installer_suffix = " Demo" if demo else ""
     default_output_name = display_name + installer_suffix + " Installer"
 

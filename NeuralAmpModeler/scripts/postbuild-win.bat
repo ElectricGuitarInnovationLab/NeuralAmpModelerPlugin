@@ -6,6 +6,7 @@ REM $(CREATE_BUNDLE_SCRIPT)"
 REM Anchor paths to this script: if %0 is relative, %~dp0 can be wrong; %~f0 fixes that.
 for %%I in ("%~f0") do set "POSTBUILD_SCRIPT_DIR=%%~dpI"
 set "THIRD_PARTY_NOTICES=%POSTBUILD_SCRIPT_DIR%..\installer\ThirdPartyNotices.txt"
+set "BUNDLED_MODELS=%POSTBUILD_SCRIPT_DIR%..\..\Models"
 
 REM MSBuild may quote args; SET uses tilde+param to strip quotes so FORMAT matches .vst3.
 set "FORMAT=%~1"
@@ -65,6 +66,7 @@ if /i "%PLATFORM%"=="Win32" (
     call "%CREATE_BUNDLE_SCRIPT%" "%BUILD_DIR%\%NAME%.vst3" "%VST_ICON%" "%FORMAT%"
     copy /y "%BUILT_BINARY%" "%BUILD_DIR%\%NAME%.vst3\Contents\x86-win"
     call :CopyThirdPartyNotices "%BUILD_DIR%\%NAME%.vst3\Contents\Resources"
+    call :CopyBundledModels "%BUILD_DIR%\%NAME%.vst3\Contents\Resources"
     call :CopyThirdPartyNotices "%BUILT_BINARY_DIR%"
     if exist "!VST3_32_PATH!" (
       echo copying VST3 bundle to 32bit VST3 Plugins folder ...
@@ -78,6 +80,7 @@ if /i "%PLATFORM%"=="Win32" (
     call "%CREATE_BUNDLE_SCRIPT%" "%BUILD_DIR%\%NAME%.aaxplugin" "%AAX_ICON%" "%FORMAT%"
     copy /y "%BUILT_BINARY%" "%BUILD_DIR%\%NAME%.aaxplugin\Contents\Win32"
     call :CopyThirdPartyNotices "%BUILD_DIR%\%NAME%.aaxplugin\Contents\Resources"
+    call :CopyBundledModels "%BUILD_DIR%\%NAME%.aaxplugin\Contents\Resources"
     echo copying 32bit bundle to 32bit AAX Plugins folder ...
     call "%CREATE_BUNDLE_SCRIPT%" "%BUILD_DIR%\%NAME%.aaxplugin" "%AAX_ICON%" "%FORMAT%"
     xcopy /E /H /Y "%BUILD_DIR%\%NAME%.aaxplugin\Contents\*" "!AAX_32_PATH!\%NAME%.aaxplugin\Contents\"
@@ -100,6 +103,7 @@ if /i "%PLATFORM%"=="x64" (
     call "%CREATE_BUNDLE_SCRIPT%" "%BUILD_DIR%\%NAME%.vst3" "%VST_ICON%" "%FORMAT%"
     copy /y "%BUILT_BINARY%" "%BUILD_DIR%\%NAME%.vst3\Contents\x86_64-win"
     call :CopyThirdPartyNotices "%BUILD_DIR%\%NAME%.vst3\Contents\Resources"
+    call :CopyBundledModels "%BUILD_DIR%\%NAME%.vst3\Contents\Resources"
     call :CopyThirdPartyNotices "%BUILT_BINARY_DIR%"
     if exist "!VST3_64_PATH!" (
       echo copying VST3 bundle to 64bit VST3 Plugins folder ...
@@ -113,6 +117,7 @@ if /i "%PLATFORM%"=="x64" (
     call "%CREATE_BUNDLE_SCRIPT%" "%BUILD_DIR%\%NAME%.aaxplugin" "%AAX_ICON%" "%FORMAT%"
     copy /y "%BUILT_BINARY%" "%BUILD_DIR%\%NAME%.aaxplugin\Contents\x64"
     call :CopyThirdPartyNotices "%BUILD_DIR%\%NAME%.aaxplugin\Contents\Resources"
+    call :CopyBundledModels "%BUILD_DIR%\%NAME%.aaxplugin\Contents\Resources"
     echo copying 64bit bundle to 64bit AAX Plugins folder ...
     call "%CREATE_BUNDLE_SCRIPT%" "%BUILD_DIR%\%NAME%.aaxplugin" "%AAX_ICON%" "%FORMAT%"
     xcopy /E /H /Y "%BUILD_DIR%\%NAME%.aaxplugin\Contents\*" "!AAX_64_PATH!\%NAME%.aaxplugin\Contents\"
@@ -125,5 +130,12 @@ goto :eof
 if exist "%THIRD_PARTY_NOTICES%" (
   if not exist "%~1" mkdir "%~1"
   copy /y "%THIRD_PARTY_NOTICES%" "%~1\ThirdPartyNotices.txt"
+)
+goto :eof
+
+:CopyBundledModels
+if exist "%BUNDLED_MODELS%" (
+  if not exist "%~1\Models" mkdir "%~1\Models"
+  xcopy /E /I /Y "%BUNDLED_MODELS%\*" "%~1\Models\"
 )
 goto :eof

@@ -56,6 +56,12 @@ def main():
         print("copying ThirdPartyNotices.txt to " + dst)
         shutil.copy(third_party_notices, dst)
 
+    models_src = os.path.abspath(os.path.join(projectpath, os.pardir, "Models"))
+    models_dst = os.path.join(dst, "Models")
+    if os.path.exists(models_src):
+        print("copying Models to " + models_dst)
+        shutil.copytree(models_src, models_dst, dirs_exist_ok=True)
+
 
 if __name__ == "__main__":
     main()

@@ -28,10 +28,10 @@ def main():
     files = []
 
     if not zip:
-        installer = "\\build-win\\installer\\NeuralAmpModeler Installer.exe"
+        installer = "\\build-win\\installer\\Puke Amp Installer.exe"
 
         if demo:
-            installer = "\\build-win\\installer\\NeuralAmpModeler Demo Installer.exe"
+            installer = "\\build-win\\installer\\Puke Amp Demo Installer.exe"
 
         files = [
             projectpath + installer,
@@ -42,8 +42,8 @@ def main():
     else:
         files = [
             projectpath
-            + "\\build-win\\NeuralAmpModeler.vst3\\Contents\\x86_64-win\\NeuralAmpModeler.vst3",
-            projectpath + "\\build-win\\NeuralAmpModeler_x64.exe",
+            + "\\build-win\\Puke Amp.vst3\\Contents\\x86_64-win\\Puke Amp.vst3",
+            projectpath + "\\build-win\\Puke Amp_x64.exe",
         ]
 
     zipname = get_archive_name(projectpath, "win", "demo" if demo == 1 else "full")
