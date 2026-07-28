@@ -2,6 +2,7 @@
 
 #include <cmath> // std::round
 #include <cstdio> // FILE, fclose
+#include <filesystem> // std::filesystem
 #include <sstream> // std::stringstream
 #include <unordered_map> // std::unordered_map
 #include "IControls.h"
@@ -474,8 +475,14 @@ private:
     if (!CStringHasContents(path.Get()))
       return false;
 
-    WDL_DirScan scan;
-    return scan.First(path.Get()) == 0;
+    try
+    {
+      return std::filesystem::is_directory(std::filesystem::u8path(path.Get()));
+    }
+    catch (const std::filesystem::filesystem_error&)
+    {
+      return false;
+    }
   }
 
   static void AppendPathComponent(WDL_String& path, const char* component)
