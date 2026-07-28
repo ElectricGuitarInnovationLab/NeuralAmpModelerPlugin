@@ -1,16 +1,16 @@
 #define PLUG_NAME "Puke Amp"
-#define PLUG_MFR "Steven Atkinson"
+#define PLUG_MFR "Puke"
 #define PLUG_VERSION_HEX 0x0000070f
 #define PLUG_VERSION_STR "0.7.15"
 #define PLUG_UNIQUE_ID 'PkAm'
 #define PLUG_MFR_ID 'SDAa'
-#define PLUG_URL_STR "https://github.com/sdatkinson/NeuralAmpModelerPlugin"
+#define PLUG_URL_STR "https://github.com/ElectricGuitarInnovationLab/NeuralAmpModelerPlugin"
 #define PLUG_EMAIL_STR "spam@me.com"
 #define PLUG_COPYRIGHT_STR "Copyright 2022 Steven Atkinson"
 #define PLUG_CLASS_NAME NeuralAmpModeler
-#define BUNDLE_NAME "NeuralAmpModeler"
-#define BUNDLE_MFR "StevenAtkinson"
-#define BUNDLE_DOMAIN "com"
+#define BUNDLE_NAME "PukeAmp"
+#define BUNDLE_MFR "theRATLAB"
+#define BUNDLE_DOMAIN "org"
 
 #define SHARED_RESOURCES_SUBPATH "NeuralAmpModeler"
 

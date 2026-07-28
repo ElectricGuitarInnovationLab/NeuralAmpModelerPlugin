@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -Eeuo pipefail
+
+report_error() {
+  local exit_code=$?
+  local line_number=$1
+  local command=$2
+
+  echo "error: command failed with exit code ${exit_code} at line ${line_number}: ${command}" >&2
+  exit "${exit_code}"
+}
+
+trap 'report_error "${LINENO}" "${BASH_COMMAND}"' ERR
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd "${script_dir}/.." && pwd)"
@@ -20,8 +31,8 @@ if [[ ! -d "${project_dir}/../iPlug2/Dependencies/IPlug/VST3_SDK" ]]; then
   exit 1
 fi
 
-mkdir -p "${products_dir}"
-
+# Let Xcode create and mark the custom products directory so its clean action can
+# safely remove it. Pre-creating it can make a successful build return code 65.
 xcodebuild \
   -project "${project_dir}/projects/NeuralAmpModeler-macOS.xcodeproj" \
   -xcconfig "${project_dir}/config/NeuralAmpModeler-mac.xcconfig" \
