@@ -31,8 +31,9 @@ if [[ ! -d "${project_dir}/../iPlug2/Dependencies/IPlug/VST3_SDK" ]]; then
   exit 1
 fi
 
-# Let Xcode create and mark the custom products directory so its clean action can
-# safely remove it. Pre-creating it can make a successful build return code 65.
+# GitHub-hosted runners start from a fresh checkout. Do not pass the clean action:
+# recent Xcode versions can finish the build successfully but return code 65 when
+# cleaning a custom CONFIGURATION_BUILD_DIR outside DerivedData.
 xcodebuild \
   -project "${project_dir}/projects/NeuralAmpModeler-macOS.xcodeproj" \
   -xcconfig "${project_dir}/config/NeuralAmpModeler-mac.xcconfig" \
@@ -42,7 +43,7 @@ xcodebuild \
   "CONFIGURATION_BUILD_DIR=${products_dir}" \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
-  clean build
+  build
 
 if [[ ! -d "${plugin_path}" ]]; then
   echo "error: build succeeded but ${plugin_path} was not created." >&2
