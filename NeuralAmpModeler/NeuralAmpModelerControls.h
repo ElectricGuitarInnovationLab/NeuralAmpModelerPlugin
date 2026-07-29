@@ -552,7 +552,7 @@ private:
     {
       case NAMBrowserState::Empty:
         mClearButton->Hide(true);
-        mGetButton->Hide(false);
+        mGetButton->Hide(true);
         break;
       case NAMBrowserState::Loaded:
         mClearButton->Hide(false);
@@ -987,13 +987,13 @@ private:
       WDL_String verStr, buildInfoStr;
       PLUG()->GetPluginVersionStr(verStr);
 
-      buildInfoStr.SetFormatted(100, "Version %s %s %s — adapted by the RATLab", verStr.Get(), PLUG()->GetArchStr(),
+      buildInfoStr.SetFormatted(100, "Version %s %s %s", verStr.Get(), PLUG()->GetArchStr(),
                                 PLUG()->GetAPIStr());
 
       AddChildControl(new IURLControl(GetRECT().SubRectVertical(5, 0), "Puke Amp adapted from Neural Amp Modeler",
                                       "https://www.neuralampmodeler.com", mText, COLOR_TRANSPARENT,
                                       PluginColors::HELP_TEXT_MO, PluginColors::HELP_TEXT_CLICKED));
-      AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 1), "NAM created by Steven Atkinson", mStyle));
+      AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 1), "NAM created by Steven Atkinson — adapted by the RATLab", mStyle));
       AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 2), buildInfoStr.Get(), mStyle));
       AddChildControl(new IURLControl(GetRECT().SubRectVertical(5, 3),
                                       "Puke Amp Plug-in development adapted from Steve Atkinson, Oli Larkin",
