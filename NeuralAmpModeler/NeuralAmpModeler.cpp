@@ -93,7 +93,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
   GetParam(kCalibrateInput)->InitBool(kCalibrateInputParamName.c_str(), kDefaultCalibrateInput);
   GetParam(kInputCalibrationLevel)
     ->InitDouble(kInputCalibrationLevelParamName.c_str(), kDefaultInputCalibrationLevel, -60.0, 60.0, 0.1, "dBu");
-  GetParam(kSlim)->InitDouble("Slim", 0.0, 0.0, 1.0, 0.01);
+  GetParam(kSlim)->InitDouble("Slim", 1.0, 0.0, 1.0, 0.01);
 
   mNoiseGateTrigger.AddListener(&mNoiseGateGain);
 
@@ -303,7 +303,7 @@ pGraphics->AttachControl(new ISVGControl(logoArea, logoSVG));
     pGraphics->AttachControl(new NAMSlimOverlayBackdropControl(b, hideSlimOverlay), kCtrlTagSlimOverlayBackdrop)
       ->Hide(true);
     pGraphics
-      ->AttachControl(new NAMKnobControl(slimKnobArea, kSlim, "Slim", style, knobBackgroundBitmap), kCtrlTagSlimKnob)
+      ->AttachControl(new NAMKnobControl(slimKnobArea, kSlim, "CPU / Quality", style, knobBackgroundBitmap), kCtrlTagSlimKnob)
       ->Hide(true);
 
     pGraphics->ForAllControlsFunc([](IControl* pControl) {
