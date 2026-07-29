@@ -19,7 +19,7 @@ jobs:
           - platform: Windows
             os: windows-latest
             artifact_name: Puke-Amp-VST3-Windows
-            artifact_path: NeuralAmpModeler/build-vst3/windows/Puke Amp-VST3-Windows.zip
+            artifact_path: NeuralAmpModeler/build-vst3/windows/Puke Amp-VST3-Windows*
 
     steps:
       - name: Check out repository
@@ -40,6 +40,18 @@ jobs:
       - name: Add MSBuild to PATH
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v2
+
+      - name: Install Inno Setup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress --yes
+          }
+          if (-not (Test-Path $iscc)) {
+            throw "Inno Setup compiler was not installed at $iscc"
+          }
 
       - name: Build macOS VST3
         if: runner.os == 'macOS'

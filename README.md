@@ -14,7 +14,7 @@ The [workflows](https://github.com/sdatkinson/NeuralAmpModelerPlugin/tree/main/.
 
 ### Building Puke Amp VST3
 
-The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/NAM` and `Models/IR`.
+The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/NAM` and `Models/IR`. The Windows artifact also contains `Puke Amp-VST3-Windows-Setup.exe`.
 
 #### Compiling the VST3 locally on macOS
 
@@ -187,13 +187,29 @@ For local Windows builds, first download the iPlug2 dependencies from Git Bash:
 (cd iPlug2/Dependencies && ./download-prebuilt-libs.sh)
 ```
 
-On Windows, run this from a Visual Studio Developer Command Prompt:
+Install [Inno Setup 6](https://jrsoftware.org/isinfo.php), then run this from a
+Visual Studio Developer Command Prompt:
 
 ```bat
 NeuralAmpModeler\scripts\make-vst3-win.bat
 ```
 
-The 64-bit build and its distributable ZIP are written to `NeuralAmpModeler\build-vst3\windows`.
+The 64-bit build, distributable ZIP, and Windows installer are written to:
+
+```text
+NeuralAmpModeler\build-vst3\windows\Puke Amp.vst3
+NeuralAmpModeler\build-vst3\windows\Puke Amp-VST3-Windows.zip
+NeuralAmpModeler\build-vst3\windows\Puke Amp-VST3-Windows-Setup.exe
+```
+
+Run the installer as an administrator to install the complete VST3 bundle in
+`C:\Program Files\Common Files\VST3\Puke Amp.vst3`, the standard system-wide
+location for a 64-bit Windows VST3. The installer also adds a normal Windows
+uninstall entry. Restart the DAW or rescan its plugins after installation.
+
+The generated installer is not digitally signed. Windows may display an
+Unknown Publisher or SmartScreen warning until the release workflow is
+configured with a Windows code-signing certificate.
 
 ### Pre-built installers
 
