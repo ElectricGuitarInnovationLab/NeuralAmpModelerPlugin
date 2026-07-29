@@ -1,0 +1,27 @@
+{
+  "title": "Puke Amp VST3 Installer",
+  "icon-size": 96,
+  "background": "dmg-background.png",
+  "window": {
+    "size": {
+      "width": 600,
+      "height": 400
+    }
+  },
+  "contents": [
+    {
+      "x": 140,
+      "y": 220,
+      "type": "file",
+      "path": "PLACEHOLDER_VST3_PATH",
+      "name": "Puke Amp.vst3"
+    },
+    {
+      "x": 430,
+      "y": 220,
+      "type": "link",
+      "path": "/Library/Audio/Plug-Ins/VST3",
+      "name": "VST3 Plug-Ins"
+    }
+  ]
+}

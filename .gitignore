@@ -2,7 +2,7 @@
 .DS_Store
 
 # Generated build output
-build-*
+**/build-*/
 /Build/
 **/build-vst3/
 

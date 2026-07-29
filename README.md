@@ -105,6 +105,64 @@ ditto "NeuralAmpModeler/build-vst3/mac/products/Puke Amp.vst3" \
 
 Restart the DAW or rescan its plugins after installation.
 
+##### Publishing a signed and notarized macOS release
+
+For a distributable release, the VST3 and its DMG must be signed with a
+Developer ID Application certificate rather than the development ad-hoc signature.
+
+Additional requirements:
+
+- A Developer ID Application certificate installed in the login keychain.
+- The `puke-amp-notary` notarytool profile stored in the macOS keychain.
+- `appdmg`, used to create the drag-install disk image.
+
+Install `appdmg` once if it is not already available:
+
+```sh
+npm install --global appdmg
+```
+
+The checked-in `CodesigningScripts/signing.env` selects the existing notary
+profile without storing the Apple ID, password, or App Store Connect key:
+
+```sh
+NOTARY_PROFILE=puke-amp-notary
+```
+
+The default signing identity is `Developer ID Application: Clear Blue Media LLC
+(HSAYDGFEVC)`. Override it for a different certificate when invoking the command:
+
+```sh
+IDENTITY="Developer ID Application: Company Name (TEAMID)" \
+  ./CodesigningScripts/build-and-sign.sh
+```
+
+To build, sign, notarize, staple, and package everything with the default identity:
+
+```sh
+./CodesigningScripts/build-and-sign.sh
+```
+
+- Stages a real bundle under `build-vst3/mac/release` instead of Xcode's symlink.
+The command:
+
+- Builds the release VST3.
+- Replaces its ad-hoc signature with a timestamped hardened-runtime signature.
+- Submits the signed VST3 to Apple using `puke-amp-notary`.
+- Staples and validates the VST3 notarization ticket.
+- Creates a DMG with the plugin and a link to `/Library/Audio/Plug-Ins/VST3`.
+- Signs, notarizes, staples, and validates the final DMG.
+
+Successful releases produce:
+
+```text
+NeuralAmpModeler/build-vst3/mac/release/Puke Amp.vst3
+NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS-0.7.15.zip
+NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS-0.7.15.dmg
+```
+
+The plugin ZIP and DMG use separate notarization submissions so both artifacts
+can carry their own stapled ticket. See Apple's [custom notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
 To update and rebuild later:
 
 ```sh
