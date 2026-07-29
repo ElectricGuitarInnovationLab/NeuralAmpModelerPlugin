@@ -90,14 +90,16 @@ sudo xcodebuild -license accept
 sudo xcodebuild -runFirstLaunch
 ```
 
-From the repository root, download the VST3 SDK and iPlug2 prebuilt libraries:
+From the repository root, download the VST3 SDK and iPlug2 prebuilt libraries.
+The SDK downloader must run from its own directory because it invokes helper
+scripts using relative paths:
 
 ```sh
-./iPlug2/Dependencies/IPlug/download-iplug-sdks.sh
-./iPlug2/Dependencies/download-prebuilt-libs.sh
+(cd iPlug2/Dependencies/IPlug && ./download-iplug-sdks.sh)
+(cd iPlug2/Dependencies && ./download-prebuilt-libs.sh)
 ```
 
-These dependency commands normally need to be run only once. Then compile,
+These dependency commands normally need to be run only once. Then, from the repository root, compile,
 ad-hoc sign, and package the VST3:
 
 ```sh
