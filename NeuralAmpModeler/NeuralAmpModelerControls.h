@@ -987,15 +987,16 @@ private:
       WDL_String verStr, buildInfoStr;
       PLUG()->GetPluginVersionStr(verStr);
 
-      buildInfoStr.SetFormatted(100, "Version %s %s %s", verStr.Get(), PLUG()->GetArchStr(), PLUG()->GetAPIStr());
+      buildInfoStr.SetFormatted(100, "Version %s %s %s — adapted by the RATLab", verStr.Get(), PLUG()->GetArchStr(),
+                                PLUG()->GetAPIStr());
 
-      AddChildControl(new IURLControl(GetRECT().SubRectVertical(5, 0), "NEURAL AMP MODELER",
+      AddChildControl(new IURLControl(GetRECT().SubRectVertical(5, 0), "Puke Amp adapted from Neural Amp Modeler",
                                       "https://www.neuralampmodeler.com", mText, COLOR_TRANSPARENT,
                                       PluginColors::HELP_TEXT_MO, PluginColors::HELP_TEXT_CLICKED));
-      AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 1), "By Steven Atkinson", mStyle));
+      AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 1), "NAM created by Steven Atkinson", mStyle));
       AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 2), buildInfoStr.Get(), mStyle));
       AddChildControl(new IURLControl(GetRECT().SubRectVertical(5, 3),
-                                      "Plug-in development: Steve Atkinson, Oli Larkin, ... ",
+                                      "Puke Amp Plug-in development adapted from Steve Atkinson, Oli Larkin",
                                       "https://github.com/sdatkinson/NeuralAmpModelerPlugin/graphs/contributors", mText,
                                       COLOR_TRANSPARENT, PluginColors::HELP_TEXT_MO, PluginColors::HELP_TEXT_CLICKED));
       AddChildControl(new ThirdPartyNoticesControl(GetRECT().SubRectVertical(5, 4), mText));
