@@ -60,7 +60,7 @@ Darwin
 If you have not cloned the repository yet, clone it with all submodules:
 
 ```sh
-git clone --recursive https://github.com/ElectricGuitarInnovationLab/NeuralAmpModelerPlugin.git
+git clone --recursive https://github.com/ElectricGuitarInnovationLab/Puke-Amp.git
 cd NeuralAmpModelerPlugin
 ```
 
@@ -68,7 +68,7 @@ If you already cloned it with Git, do not clone it again. Change to the existing
 repository root and initialize any missing submodules:
 
 ```sh
-cd "/path/to/NeuralAmpModelerPlugin"
+cd "/path/to/Puke-Amp"
 git submodule update --init --recursive
 ```
 
