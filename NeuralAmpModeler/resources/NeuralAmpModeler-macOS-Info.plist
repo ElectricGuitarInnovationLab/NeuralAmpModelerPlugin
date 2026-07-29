@@ -5,23 +5,23 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleExecutable</key>
-	<string>NeuralAmpModeler</string>
+	<string>PukeAmp</string>
 	<key>CFBundleGetInfoString</key>
-	<string>NeuralAmpModeler v0.7.15 Copyright 2022 Steven Atkinson</string>
+	<string>Puke Amp v0.7.15 Copyright 2022 Steven Atkinson</string>
 	<key>CFBundleIconFile</key>
 	<string>NeuralAmpModeler.icns</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.StevenAtkinson.app.NeuralAmpModeler</string>
+	<string>org.theRATLAB.app.PukeAmp</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>NeuralAmpModeler</string>
+	<string>PukeAmp</string>
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.7.15</string>
 	<key>CFBundleSignature</key>
-	<string>1YEo</string>
+	<string>PkAm</string>
 	<key>CFBundleVersion</key>
 	<string>0.7.15</string>
 	<key>CSResourcesFileMapped</key>
@@ -31,7 +31,7 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>10.15.0</string>
 	<key>NSMainNibFile</key>
-	<string>NeuralAmpModeler-macOS-MainMenu</string>
+	<string>PukeAmp-macOS-MainMenu</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app needs mic access to process audio.</string>
 	<key>NSPrincipalClass</key>

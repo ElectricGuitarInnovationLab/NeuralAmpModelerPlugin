@@ -5,15 +5,15 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleExecutable</key>
-	<string>NeuralAmpModeler</string>
+	<string>PukeAmp</string>
 	<key>CFBundleGetInfoString</key>
-	<string>NeuralAmpModeler v0.7.15 Copyright 2022 Steven Atkinson</string>
+	<string>Puke Amp v0.7.15 Copyright 2022 Steven Atkinson</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.StevenAtkinson.aax.NeuralAmpModeler</string>
+	<string>org.theRATLAB.aax.PukeAmp</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>NeuralAmpModeler</string>
+	<string>PukeAmp</string>
 	<key>CFBundlePackageType</key>
 	<string>TDMw</string>
 	<key>CFBundleShortVersionString</key>

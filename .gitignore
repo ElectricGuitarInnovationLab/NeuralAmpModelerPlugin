@@ -1,7 +1,13 @@
+# macOS metadata
 .DS_Store
+
+# Generated build output
+build-*
+/Build/
+**/build-vst3/
+
 xcuserdata
 *.RPP-bak
-build-*
 .idea/
 
 *.ipch
