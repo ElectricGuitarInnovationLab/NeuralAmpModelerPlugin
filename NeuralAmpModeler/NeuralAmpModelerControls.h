@@ -844,6 +844,44 @@ public:
     AddNamedChildControl(new IBitmapControl(GetRECT(), mBitmap), mControlNames.bitmap)->SetIgnoreMouse(true);
     const auto titleArea = GetRECT().GetPadded(-(pad + 10.0f)).GetFromTop(50.0f);
     AddNamedChildControl(new IVLabelControl(titleArea, "SETTINGS", titleStyle), mControlNames.title);
+    const auto presetButtonsArea = titleArea.GetFromLeft(180.0f).GetMidVPadded(15.0f);
+    const auto savePresetArea = presetButtonsArea.GetGridCell(0, 0, 1, 2).GetPadded(-3.0f);
+    const auto loadPresetArea = presetButtonsArea.GetGridCell(0, 1, 1, 2).GetPadded(-3.0f);
+    const auto presetButtonStyle = style.WithShowLabel(false).WithShowValue(true).WithDrawFrame(true);
+
+    auto savePreset = [this](IControl* pCaller) {
+      WDL_String fileName("Puke Amp Preset.fxp");
+      WDL_String path;
+      auto* plugin = PLUG();
+      auto* ui = pCaller->GetUI();
+      ui->PromptForFile(
+        fileName, path, EFileAction::Save, "fxp",
+        [plugin, ui](const WDL_String& selectedFile, const WDL_String&) {
+          if (selectedFile.GetLength() && !plugin->SavePresetAsFXP(selectedFile.Get()))
+            ui->ShowMessageBox("The preset file could not be saved.", "Failed to save preset", kMB_OK);
+        });
+    };
+
+    auto loadPreset = [this](IControl* pCaller) {
+      WDL_String fileName;
+      WDL_String path;
+      auto* plugin = PLUG();
+      auto* ui = pCaller->GetUI();
+      ui->PromptForFile(
+        fileName, path, EFileAction::Open, "fxp",
+        [plugin, ui](const WDL_String& selectedFile, const WDL_String&) {
+          if (selectedFile.GetLength() && !plugin->LoadPresetFromFXP(selectedFile.Get()))
+            ui->ShowMessageBox("The selected file is not a valid Puke Amp preset.", "Failed to load preset", kMB_OK);
+        });
+    };
+
+    AddNamedChildControl(new IVButtonControl(savePresetArea, SplashClickActionFunc, "SAVE PRESET", presetButtonStyle),
+                         mControlNames.savePreset)
+      ->SetAnimationEndActionFunction(savePreset);
+    AddNamedChildControl(new IVButtonControl(loadPresetArea, SplashClickActionFunc, "LOAD PRESET", presetButtonStyle),
+                         mControlNames.loadPreset)
+      ->SetAnimationEndActionFunction(loadPreset);
+
 
     // Attach input/output calibration controls
     {
@@ -923,8 +961,10 @@ private:
     const std::string calibrateInput = "CalibrateInput";
     const std::string close = "Close";
     const std::string inputCalibrationLevel = "InputCalibrationLevel";
+    const std::string loadPreset = "LoadPreset";
     const std::string modelInfo = "ModelInfo";
     const std::string outputMode = "OutputMode";
+    const std::string savePreset = "SavePreset";
     const std::string title = "Title";
   } mControlNames;
 
@@ -993,10 +1033,10 @@ private:
       AddChildControl(new IURLControl(GetRECT().SubRectVertical(5, 0), "Puke Amp adapted from Neural Amp Modeler",
                                       "https://www.neuralampmodeler.com", mText, COLOR_TRANSPARENT,
                                       PluginColors::HELP_TEXT_MO, PluginColors::HELP_TEXT_CLICKED));
-      AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 1), "NAM created by Steven Atkinson — adapted by the RATLab", mStyle));
+      AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 1), "NAM created by Steven Atkinson, adapted by the RATLab", mStyle));
       AddChildControl(new IVLabelControl(GetRECT().SubRectVertical(5, 2), buildInfoStr.Get(), mStyle));
       AddChildControl(new IURLControl(GetRECT().SubRectVertical(5, 3),
-                                      "Puke Amp Plug-in development adapted from Steve Atkinson, Oli Larkin",
+                                      "Plug-in adapted from Steve Atkinson, Oli Larkin",
                                       "https://github.com/sdatkinson/NeuralAmpModelerPlugin/graphs/contributors", mText,
                                       COLOR_TRANSPARENT, PluginColors::HELP_TEXT_MO, PluginColors::HELP_TEXT_CLICKED));
       AddChildControl(new ThirdPartyNoticesControl(GetRECT().SubRectVertical(5, 4), mText));
