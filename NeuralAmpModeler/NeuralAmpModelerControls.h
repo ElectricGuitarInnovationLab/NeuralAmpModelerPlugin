@@ -855,7 +855,10 @@ public:
     Hide(hide);
     ForAllChildrenFunc([hide](int, IControl* child) { child->Hide(hide); });
     if (GetUI())
+    {
       GetUI()->SetAllControlsDirty();
+      GetUI()->UpdateTooltips();
+    }
   }
 
   void RefreshFromPlugin()
@@ -942,7 +945,7 @@ public:
       AddChildControl(mKnobs[i]);
     }
 
-    const auto switchesArea = content.GetFromTop(48.f).GetVShifted(263.f);
+    const auto switchesArea = content.GetFromTop(48.f).GetVShifted(269.f);
     mSlotSwitch = new NAMSwitchControl(switchesArea.GetGridCell(0, 0, 1, 4).GetPadded(-5.f),
                                        FXParamIndex(0, kFXEnabledOffset), "Off/On", mStyle, mSwitchBitmap);
     AddChildControl(mSlotSwitch);

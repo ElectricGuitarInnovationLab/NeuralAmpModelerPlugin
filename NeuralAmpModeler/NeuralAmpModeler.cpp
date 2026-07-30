@@ -193,9 +193,9 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
       contentArea.GetFromBottom((2.0f * fileHeight)).GetFromTop(fileHeight).GetMidHPadded(fileWidth).GetVShifted(-1);
     const auto slimIconArea =
       IRECT(modelArea.R + 6.f, modelArea.MH() - 14.f, modelArea.R + 6.f + 2.f * 28.f, modelArea.MH() + 14.f);
-    const auto modelIconArea = modelArea.GetFromLeft(30).GetTranslated(-40, 6);
+    const auto modelIconArea = modelArea.GetFromLeft(30).GetTranslated(-40, 2);
     const auto irArea = modelArea.GetVShifted(irYOffset);
-    const auto irIconArea = irArea.GetFromLeft(30.0f).GetTranslated(-40.0f, 6.0f);
+    const auto irIconArea = irArea.GetFromLeft(30.0f).GetTranslated(-40.0f, 2.0f);
 
     // Areas for meters
     const auto inputMeterArea = contentArea.GetFromLeft(30).GetHShifted(-20).GetMidVPadded(100).GetVShifted(-25);
