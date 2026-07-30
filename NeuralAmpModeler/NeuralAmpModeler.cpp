@@ -136,11 +136,15 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     const auto fileSVG = pGraphics->LoadSVG(FILE_FN);
     const auto globeSVG = pGraphics->LoadSVG(GLOBE_ICON_FN);
     const auto crossSVG = pGraphics->LoadSVG(CLOSE_BUTTON_FN);
+    const auto savePresetSVG = pGraphics->LoadSVG(SAVE_ICON_FN);
+    const auto openPresetSVG = pGraphics->LoadSVG(OPEN_ICON_FN);
     const auto rightArrowSVG = pGraphics->LoadSVG(RIGHT_ARROW_FN);
     const auto leftArrowSVG = pGraphics->LoadSVG(LEFT_ARROW_FN);
     const auto ampIconSVG = pGraphics->LoadSVG(AMP_ICON_FN);
     const auto speakerIconSVG = pGraphics->LoadSVG(SPEAKER_ICON_FN);
     const auto pedalSVG = pGraphics->LoadSVG(PEDAL_ICON_FN);
+    const auto effectOffSVG = pGraphics->LoadSVG(EFFECT_OFF_ICON_FN);
+    const auto effectOnSVG = pGraphics->LoadSVG(EFFECT_ON_ICON_FN);
     const auto slimIconSVG = pGraphics->LoadSVG(SLIMMABLE_ICON_FN);
     const auto logoSVG = pGraphics->LoadSVG(MY_LOGO_FN);
 
@@ -309,7 +313,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
 
     pGraphics->AttachControl(
       new NAMFXPageControl(b, backgroundBitmap, fileBackgroundBitmap, knobBackgroundBitmap, switchHandleBitmap,
-                           crossSVG, fileSVG, leftArrowSVG, rightArrowSVG, globeSVG, style),
+                           crossSVG, fileSVG, leftArrowSVG, rightArrowSVG, globeSVG, effectOffSVG, effectOnSVG, style),
       kCtrlTagFXPage)->Hide(true);
 
     // Settings/help/about box
@@ -322,7 +326,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
 
     pGraphics
       ->AttachControl(new NAMSettingsPageControl(b, backgroundBitmap, inputLevelBackgroundBitmap, switchHandleBitmap,
-                                                 crossSVG, style, radioButtonStyle),
+                                                 crossSVG, savePresetSVG, openPresetSVG, style, radioButtonStyle),
                       kCtrlTagSettingsBox)
       ->Hide(true);
 
@@ -389,7 +393,6 @@ void NeuralAmpModeler::ProcessBlock(iplug::sample** inputs, iplug::sample** outp
   sample** ampInput = triggerOutput;
   sample* fxInputPointers[] = {mFXBufferA.data()};
   sample* fxOutputPointers[] = {mFXBufferB.data()};
-  const bool fxChainEnabled = GetParam(kFXChainEnabled)->Bool();
   const double mixStep = sampleRate > 0.0 ? 1.0 / (0.01 * sampleRate) : 1.0;
   for (int slotIndex = 0; slotIndex < kMaxFXSlots; ++slotIndex)
   {
@@ -397,8 +400,7 @@ void NeuralAmpModeler::ProcessBlock(iplug::sample** inputs, iplug::sample** outp
     if (!slot.model)
       continue;
 
-    const bool targetActive = fxChainEnabled && !slot.removing &&
-                              GetParam(FXParamIndex(slotIndex, kFXEnabledOffset))->Bool();
+    const bool targetActive = !slot.removing && GetParam(FXParamIndex(slotIndex, kFXEnabledOffset))->Bool();
     if (!targetActive && slot.wetMix <= 0.0)
     {
       if (slot.removing)
@@ -420,14 +422,10 @@ void NeuralAmpModeler::ProcessBlock(iplug::sample** inputs, iplug::sample** outp
     }
 
     slot.model->process(fxInputPointers, fxOutputPointers, nFrames);
-    sample** pedalOutput = fxOutputPointers;
-    if (GetParam(FXParamIndex(slotIndex, kFXEQActiveOffset))->Bool())
-    {
-      slot.toneStack->SetParam("bass", GetParam(FXParamIndex(slotIndex, kFXBassOffset))->Value());
-      slot.toneStack->SetParam("middle", GetParam(FXParamIndex(slotIndex, kFXMidOffset))->Value());
-      slot.toneStack->SetParam("treble", GetParam(FXParamIndex(slotIndex, kFXTrebleOffset))->Value());
-      pedalOutput = slot.toneStack->Process(fxOutputPointers, numChannelsInternal, nFrames);
-    }
+    slot.toneStack->SetParam("bass", GetParam(FXParamIndex(slotIndex, kFXBassOffset))->Value());
+    slot.toneStack->SetParam("middle", GetParam(FXParamIndex(slotIndex, kFXMidOffset))->Value());
+    slot.toneStack->SetParam("treble", GetParam(FXParamIndex(slotIndex, kFXTrebleOffset))->Value());
+    sample** pedalOutput = slot.toneStack->Process(fxOutputPointers, numChannelsInternal, nFrames);
     for (size_t frame = 0; frame < numFrames; ++frame)
     {
       slot.wetMix = std::clamp(slot.wetMix + (targetActive ? mixStep : -mixStep), 0.0, 1.0);
@@ -633,10 +631,7 @@ void NeuralAmpModeler::OnParamChangeUI(int paramIdx, EParamSource source)
         pGraphics->ForControlInGroup("EQ_KNOBS", [active](IControl* pControl) { pControl->SetDisabled(!active); });
         break;
       case kIRToggle: pGraphics->GetControlWithTag(kCtrlTagIRFileBrowser)->SetDisabled(!active); break;
-      default:
-        if (paramIdx >= kFXParamBase && ((paramIdx - kFXParamBase) % kNumFXParamsPerSlot) == kFXEQActiveOffset)
-          _RefreshFXPage();
-        break;
+      default: break;
     }
   }
 }
@@ -1201,12 +1196,9 @@ void NeuralAmpModeler::_UpdateLatency()
   {
     latency += mModel->GetLatency();
   }
-  if (GetParam(kFXChainEnabled)->Bool())
-  {
-    for (int slot = 0; slot < kMaxFXSlots; ++slot)
-      if (mFXSlots[slot]->model && GetParam(FXParamIndex(slot, kFXEnabledOffset))->Bool())
-        latency += mFXSlots[slot]->model->GetLatency();
-  }
+  for (int slot = 0; slot < kMaxFXSlots; ++slot)
+    if (mFXSlots[slot]->model && GetParam(FXParamIndex(slot, kFXEnabledOffset))->Bool())
+      latency += mFXSlots[slot]->model->GetLatency();
   // Other things that add latency here...
 
   // Feels weird to have to do this.

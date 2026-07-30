@@ -68,6 +68,42 @@ public:
   }
 };
 
+class NAMEffectSlotButtonControl : public NAMSquareButtonControl
+{
+public:
+  NAMEffectSlotButtonControl(const IRECT& bounds, IActionFunction action, const ISVG& offSVG, const ISVG& onSVG)
+  : NAMSquareButtonControl(bounds, action, offSVG)
+  , mEmptySVG(offSVG)
+  , mLoadedSVG(onSVG)
+  {
+  }
+
+  void SetLoaded(bool loaded)
+  {
+    const ISVG& svg = loaded ? mLoadedSVG : mEmptySVG;
+    mOffSVG = svg;
+    mOnSVG = svg;
+    SetDirty(false);
+  }
+
+  void SetSelected(bool selected)
+  {
+    mSelected = selected;
+    SetDirty(false);
+  }
+
+  void Draw(IGraphics& g) override
+  {
+    NAMSquareButtonControl::Draw(g);
+    if (mSelected)
+      g.DrawRoundRect(PluginColors::NAM_THEMECOLOR, mRECT, 2.f, nullptr, 1.5f);
+  }
+
+private:
+  ISVG mEmptySVG, mLoadedSVG;
+  bool mSelected = false;
+};
+
 /// Full-window dim layer; click dismisses (used for Slim overlay).
 class NAMSlimOverlayBackdropControl : public IControl
 {
@@ -780,7 +816,7 @@ public:
   NAMFXPageControl(const IRECT& bounds, const IBitmap& background, const IBitmap& fileBackground,
                    const IBitmap& knobBackground, const IBitmap& switchBitmap, const ISVG& closeSVG,
                    const ISVG& fileSVG, const ISVG& leftSVG, const ISVG& rightSVG, const ISVG& globeSVG,
-                   const IVStyle& style)
+                   const ISVG& effectOffSVG, const ISVG& effectOnSVG, const IVStyle& style)
   : IContainerBaseWithNamedChildren(bounds)
   , mBackground(background)
   , mFileBackground(fileBackground)
@@ -791,6 +827,8 @@ public:
   , mLeftSVG(leftSVG)
   , mRightSVG(rightSVG)
   , mGlobeSVG(globeSVG)
+  , mEffectOffSVG(effectOffSVG)
+  , mEffectOnSVG(effectOnSVG)
   , mStyle(style)
   {
     mIgnoreMouse = false;
@@ -821,11 +859,12 @@ public:
     {
       if (mSlotButtons[slot])
       {
-        std::stringstream label;
-        label << (slot + 1);
-        if (plugin->GetFXModelPath(slot).GetLength())
-          label << " *";
-        mSlotButtons[slot]->SetLabelStr(label.str().c_str());
+        const bool loaded = plugin->GetFXModelPath(slot).GetLength() > 0;
+        mSlotButtons[slot]->SetLoaded(loaded);
+        mSlotButtons[slot]->SetSelected(slot == mSelectedSlot);
+        std::stringstream tooltip;
+        tooltip << "Effect slot " << (slot + 1) << (loaded ? " (loaded)" : " (empty)");
+        mSlotButtons[slot]->SetTooltip(tooltip.str().c_str());
       }
     }
 
@@ -857,16 +896,17 @@ public:
 
     AddChildControl(new IBitmapControl(bounds, mBackground))->SetIgnoreMouse(true);
     AddChildControl(new IVLabelControl(content.GetFromTop(42.f), "PEDAL FX CHAIN", titleStyle));
-    AddChildControl(new NAMSquareButtonControl(
-      CornerButtonArea(bounds), [this](IControl*) { HidePage(true); }, mCloseSVG));
+    auto* closeButton = AddChildControl(new NAMSquareButtonControl(
+      CornerButtonArea(bounds).GetScaledAboutCentre(1.4f).GetHShifted(-40.f),
+      [this](IControl*) { HidePage(true); }, mCloseSVG));
+    closeButton->SetTooltip("Close pedal FX chain");
 
     auto slotArea = content.GetFromTop(34.f).GetVShifted(48.f);
     for (int slot = 0; slot < kMaxFXSlots; ++slot)
     {
-      auto cell = slotArea.GetGridCell(0, slot, 1, kMaxFXSlots).GetPadded(-3.f);
-      std::string label = std::to_string(slot + 1);
-      mSlotButtons[slot] = new IVButtonControl(
-        cell, [this, slot](IControl*) { SelectSlot(slot); }, label.c_str(), buttonStyle);
+      auto cell = slotArea.GetGridCell(0, slot, 1, kMaxFXSlots).GetCentredInside(32.f, 32.f);
+      mSlotButtons[slot] = new NAMEffectSlotButtonControl(
+        cell, [this, slot](IControl*) { SelectSlot(slot); }, mEffectOffSVG, mEffectOnSVG);
       AddChildControl(mSlotButtons[slot]);
     }
 
@@ -899,15 +939,9 @@ public:
     }
 
     const auto switchesArea = content.GetFromTop(48.f).GetVShifted(263.f);
-    mChainSwitch = new NAMSwitchControl(switchesArea.GetGridCell(0, 0, 1, 4).GetPadded(-5.f), kFXChainEnabled,
-                                        "FX CHAIN", mStyle, mSwitchBitmap);
-    mSlotSwitch = new NAMSwitchControl(switchesArea.GetGridCell(0, 1, 1, 4).GetPadded(-5.f),
-                                       FXParamIndex(0, kFXEnabledOffset), "PEDAL", mStyle, mSwitchBitmap);
-    mEQSwitch = new NAMSwitchControl(switchesArea.GetGridCell(0, 2, 1, 4).GetPadded(-5.f),
-                                     FXParamIndex(0, kFXEQActiveOffset), "PEDAL EQ", mStyle, mSwitchBitmap);
-    AddChildControl(mChainSwitch);
+    mSlotSwitch = new NAMSwitchControl(switchesArea.GetGridCell(0, 0, 1, 4).GetPadded(-5.f),
+                                       FXParamIndex(0, kFXEnabledOffset), "Off/On", mStyle, mSwitchBitmap);
     AddChildControl(mSlotSwitch);
-    AddChildControl(mEQSwitch);
 
     const auto editButtons = switchesArea.GetGridCell(0, 3, 1, 4).GetPadded(-3.f);
     AddChildControl(new IVButtonControl(editButtons.GetGridCell(0, 0, 1, 3).GetPadded(-2.f),
@@ -945,25 +979,17 @@ private:
       mKnobs[i]->SetValueFromDelegate(PLUG()->GetParam(paramIdx)->GetNormalized());
     }
     const int enabledIdx = FXParamIndex(mSelectedSlot, kFXEnabledOffset);
-    const int eqIdx = FXParamIndex(mSelectedSlot, kFXEQActiveOffset);
     mSlotSwitch->SetParamIdx(enabledIdx);
     mSlotSwitch->SetValueFromDelegate(PLUG()->GetParam(enabledIdx)->GetNormalized());
-    mEQSwitch->SetParamIdx(eqIdx);
-    mEQSwitch->SetValueFromDelegate(PLUG()->GetParam(eqIdx)->GetNormalized());
-    const bool eqEnabled = PLUG()->GetParam(eqIdx)->Bool();
-    for (int i = 2; i < 5; ++i)
-      mKnobs[i]->SetDisabled(!eqEnabled);
   }
 
   IBitmap mBackground, mFileBackground, mKnobBackground, mSwitchBitmap;
-  ISVG mCloseSVG, mFileSVG, mLeftSVG, mRightSVG, mGlobeSVG;
+  ISVG mCloseSVG, mFileSVG, mLeftSVG, mRightSVG, mGlobeSVG, mEffectOffSVG, mEffectOnSVG;
   IVStyle mStyle;
   int mSelectedSlot = 0;
-  std::array<IVButtonControl*, kMaxFXSlots> mSlotButtons{};
+  std::array<NAMEffectSlotButtonControl*, kMaxFXSlots> mSlotButtons{};
   std::array<NAMKnobControl*, 5> mKnobs{};
-  NAMSwitchControl* mChainSwitch = nullptr;
   NAMSwitchControl* mSlotSwitch = nullptr;
-  NAMSwitchControl* mEQSwitch = nullptr;
   NAMFileBrowserControl* mBrowser = nullptr;
 };
 
@@ -971,8 +997,8 @@ class NAMSettingsPageControl : public IContainerBaseWithNamedChildren
 {
 public:
   NAMSettingsPageControl(const IRECT& bounds, const IBitmap& bitmap, const IBitmap& inputLevelBackgroundBitmap,
-                         const IBitmap& switchBitmap, ISVG closeSVG, const IVStyle& style,
-                         const IVStyle& radioButtonStyle)
+                         const IBitmap& switchBitmap, ISVG closeSVG, ISVG saveSVG, ISVG openSVG,
+                         const IVStyle& style, const IVStyle& radioButtonStyle)
   : IContainerBaseWithNamedChildren(bounds)
   , mAnimationTime(0)
   , mBitmap(bitmap)
@@ -981,6 +1007,8 @@ public:
   , mStyle(style)
   , mRadioButtonStyle(radioButtonStyle)
   , mCloseSVG(closeSVG)
+  , mSaveSVG(saveSVG)
+  , mOpenSVG(openSVG)
   {
     mIgnoreMouse = false;
   }
@@ -1052,10 +1080,9 @@ public:
     AddNamedChildControl(new IBitmapControl(GetRECT(), mBitmap), mControlNames.bitmap)->SetIgnoreMouse(true);
     const auto titleArea = GetRECT().GetPadded(-(pad + 10.0f)).GetFromTop(50.0f);
     AddNamedChildControl(new IVLabelControl(titleArea, "SETTINGS", titleStyle), mControlNames.title);
-    const auto presetButtonsArea = titleArea.GetFromLeft(180.0f).GetMidVPadded(15.0f);
-    const auto savePresetArea = presetButtonsArea.GetGridCell(0, 0, 1, 2).GetPadded(-3.0f);
-    const auto loadPresetArea = presetButtonsArea.GetGridCell(0, 1, 1, 2).GetPadded(-3.0f);
-    const auto presetButtonStyle = style.WithShowLabel(false).WithShowValue(true).WithDrawFrame(true);
+    const auto presetButtonsArea = titleArea.GetFromLeft(90.0f);
+    const auto savePresetArea = presetButtonsArea.GetGridCell(0, 0, 1, 2).GetCentredInside(28.0f, 28.0f);
+    const auto loadPresetArea = presetButtonsArea.GetGridCell(0, 1, 1, 2).GetCentredInside(28.0f, 28.0f);
 
     auto savePreset = [this](IControl* pCaller) {
       WDL_String fileName("Puke Amp Preset.fxp");
@@ -1083,12 +1110,14 @@ public:
         });
     };
 
-    AddNamedChildControl(new IVButtonControl(savePresetArea, SplashClickActionFunc, "SAVE PRESET", presetButtonStyle),
-                         mControlNames.savePreset)
-      ->SetAnimationEndActionFunction(savePreset);
-    AddNamedChildControl(new IVButtonControl(loadPresetArea, SplashClickActionFunc, "LOAD PRESET", presetButtonStyle),
-                         mControlNames.loadPreset)
-      ->SetAnimationEndActionFunction(loadPreset);
+    auto* savePresetButton = AddNamedChildControl(
+      new NAMSquareButtonControl(savePresetArea, DefaultClickActionFunc, mSaveSVG), mControlNames.savePreset);
+    savePresetButton->SetTooltip("Save preset");
+    savePresetButton->SetAnimationEndActionFunction(savePreset);
+    auto* loadPresetButton = AddNamedChildControl(
+      new NAMSquareButtonControl(loadPresetArea, DefaultClickActionFunc, mOpenSVG), mControlNames.loadPreset);
+    loadPresetButton->SetTooltip("Open preset");
+    loadPresetButton->SetAnimationEndActionFunction(loadPreset);
 
 
     // Attach input/output calibration controls
@@ -1156,7 +1185,7 @@ private:
   IBitmap mSwitchBitmap;
   IVStyle mStyle;
   IVStyle mRadioButtonStyle;
-  ISVG mCloseSVG;
+  ISVG mCloseSVG, mSaveSVG, mOpenSVG;
   int mAnimationTime = 200;
   bool mWillHide = false;
 
