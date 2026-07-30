@@ -22,6 +22,9 @@
 
 void NeuralAmpModeler::_UnserializeApplyConfig(nlohmann::json& config)
 {
+  if (static_cast<std::string>(config["PreNAMPath"]).empty())
+    config["PreModelEnabled"] = 0.0;
+
   auto getParamByName = [&](std::string& name) {
     // Could use a map but eh
     for (int i = 0; i < kNumParams; i++)
@@ -54,17 +57,24 @@ void NeuralAmpModeler::_UnserializeApplyConfig(nlohmann::json& config)
   OnParamReset(iplug::EParamSource::kPresetRecall);
   LEAVE_PARAMS_MUTEX
 
-  mNAMPath.Set(static_cast<std::string>(config["NAMPath"]).c_str());
+  mAmpModelSlot.mPath.Set(static_cast<std::string>(config["NAMPath"]).c_str());
+  mPreModelSlot.mPath.Set(static_cast<std::string>(config["PreNAMPath"]).c_str());
   mIRPath.Set(static_cast<std::string>(config["IRPath"]).c_str());
 
-  if (mNAMPath.GetLength())
-  {
-    _StageModel(mNAMPath);
-  }
+  if (mAmpModelSlot.mPath.GetLength())
+    _StageModel(EModelSlot::Amp, mAmpModelSlot.mPath);
+  else
+    mAmpModelSlot.mShouldRemove = true;
+
+  if (mPreModelSlot.mPath.GetLength())
+    _StageModel(EModelSlot::Pre, mPreModelSlot.mPath);
+  else
+    mPreModelSlot.mShouldRemove = true;
+
   if (mIRPath.GetLength())
-  {
     _StageIR(mIRPath);
-  }
+  else
+    mShouldRemoveIR = true;
 }
 
 // Unserialize NAM Path, IR path, then named keys
@@ -97,11 +107,61 @@ void _RenameKeys(nlohmann::json& j, std::unordered_map<std::string, std::string>
   }
 }
 
+// v0.7.16
+
+void _UpdateConfigFrom_0_7_16(nlohmann::json& config)
+{
+  // Fill me in once something changes!
+}
+
+int _GetConfigFrom_0_7_16(const iplug::IByteChunk& chunk, int startPos, nlohmann::json& config)
+{
+  int pos = startPos;
+  WDL_String path;
+  pos = chunk.GetStr(path, pos);
+  config["NAMPath"] = std::string(path.Get());
+  pos = chunk.GetStr(path, pos);
+  config["IRPath"] = std::string(path.Get());
+  pos = chunk.GetStr(path, pos);
+  config["PreNAMPath"] = std::string(path.Get());
+
+  std::vector<std::string> paramNames{"Input",
+                                      "Threshold",
+                                      "Bass",
+                                      "Middle",
+                                      "Treble",
+                                      "Output",
+                                      "NoiseGateActive",
+                                      "ToneStack",
+                                      "IRToggle",
+                                      "CalibrateInput",
+                                      "InputCalibrationLevel",
+                                      "OutputMode",
+                                      "Slim",
+                                      "PreModelEnabled",
+                                      "PreModelInput",
+                                      "PreModelOutput",
+                                      "PreModelSlim"};
+  for (const auto& name : paramNames)
+  {
+    double value = 0.0;
+    pos = chunk.Get(&value, pos);
+    config[name] = value;
+  }
+  _UpdateConfigFrom_0_7_16(config);
+  return pos;
+}
+
 // v0.7.14
 
 void _UpdateConfigFrom_0_7_14(nlohmann::json& config)
 {
-  // Fill me in once something changes!
+  config["PreNAMPath"] = "";
+  config["PreModelEnabled"] = 0.0;
+  config["PreModelInput"] = 0.0;
+  config["PreModelOutput"] = 0.0;
+  config["PreModelSlim"] = 1.0;
+  _UpdateConfigFrom_0_7_16(config);
 }
 
 int _GetConfigFrom_0_7_14(const iplug::IByteChunk& chunk, int startPos, nlohmann::json& config)
@@ -277,7 +337,11 @@ int NeuralAmpModeler::_UnserializeStateWithKnownVersion(const iplug::IByteChunk&
   _Version version(versionStr);
   // Act accordingly
   nlohmann::json config;
-  if (version >= _Version(0, 7, 14))
+  if (version >= _Version(0, 7, 16))
+  {
+    pos = _GetConfigFrom_0_7_16(chunk, pos, config);
+  }
+  else if (version >= _Version(0, 7, 14))
   {
     pos = _GetConfigFrom_0_7_14(chunk, pos, config);
   }

@@ -47,6 +47,11 @@ enum EParams
   kInputCalibrationLevel,
   kOutputMode,
   kSlim,
+  // Keep new parameters appended so existing host automation indices remain stable.
+  kPreModelEnabled,
+  kPreModelInputLevel,
+  kPreModelOutputLevel,
+  kPreModelSlim,
   kNumParams
 };
 
@@ -65,6 +70,12 @@ enum ECtrlTags
   kCtrlTagSlimmableIcon,
   kCtrlTagSlimOverlayBackdrop,
   kCtrlTagSlimKnob,
+  kCtrlTagPreModelFileBrowser,
+  kCtrlTagAddPreModel,
+  kCtrlTagPreModelEnabled,
+  kCtrlTagPreModelInputLevel,
+  kCtrlTagPreModelOutputLevel,
+  kCtrlTagPreModelSlim,
   kNumCtrlTags
 };
 
@@ -72,6 +83,7 @@ enum EMsgTags
 {
   // These tags are used from UI -> DSP
   kMsgTagClearModel = 0,
+  kMsgTagClearPreModel,
   kMsgTagClearIR,
   kMsgTagHighlightColor,
   // The following tags are from DSP -> UI
@@ -193,6 +205,30 @@ private:
   std::function<void(NAM_SAMPLE**, NAM_SAMPLE**, int)> mBlockProcessFunc;
 };
 
+enum class EModelSlot
+{
+  Pre,
+  Amp
+};
+
+struct ModelSlot
+{
+  ModelSlot(int browserCtrlTag, int slimParamIdx)
+  : mBrowserCtrlTag(browserCtrlTag)
+  , mSlimParamIdx(slimParamIdx)
+  {
+  }
+
+  std::unique_ptr<ResamplingNAM> mModel;
+  std::unique_ptr<ResamplingNAM> mStagedModel;
+  WDL_String mPath;
+  std::atomic<bool> mShouldRemove = false;
+  std::atomic<bool> mNewModelLoadedInDSP = false;
+  std::atomic<bool> mModelCleared = false;
+  int mBrowserCtrlTag;
+  int mSlimParamIdx;
+};
+
 class NeuralAmpModeler final : public iplug::Plugin
 {
 public:
@@ -213,7 +249,7 @@ public:
   bool OnMessage(int msgTag, int ctrlTag, int dataSize, const void* pData) override;
 
 private:
-  // Allocates mInputPointers and mOutputPointers
+  // Allocates pointers for the internal audio buffers.
   void _AllocateIOPointers(const size_t nChans);
   // Moves DSP modules from staging area to the main area.
   // Also deletes DSP modules that are flagged for removal.
@@ -228,15 +264,16 @@ private:
   size_t _GetBufferNumChannels() const;
   size_t _GetBufferNumFrames() const;
   void _InitToneStack();
-  // Loads a NAM model and stores it to mStagedNAM
+  ModelSlot& _GetModelSlot(EModelSlot slot);
+  const ModelSlot& _GetModelSlot(EModelSlot slot) const;
+  // Loads a NAM model into a slot's staging area.
   // Returns an empty string on success, or an error message on failure.
-  std::string _StageModel(const WDL_String& dspFile);
+  std::string _StageModel(EModelSlot slot, const WDL_String& dspFile);
   // Loads an IR and stores it to mStagedIR.
   // Return status code so that error messages can be relayed if
   // it wasn't successful.
   dsp::wav::LoadReturnCode _StageIR(const WDL_String& irPath);
 
-  bool _HaveModel() const { return this->mModel != nullptr; };
   // Prepare the input & output buffers
   void _PrepareBuffers(const size_t numChannels, const size_t numFrames);
   // Manage pointers
@@ -255,7 +292,8 @@ private:
 
   void _SetInputGain();
   void _SetOutputGain();
-  void _ApplySlimParamToLoadedNAMs();
+  void _ApplySlimParamToModelSlot(EModelSlot slot);
+  void _SetPreModelUIVisible(bool visible);
 
   // See: Unserialization.cpp
   void _UnserializeApplyConfig(nlohmann::json& config);
@@ -278,34 +316,31 @@ private:
 
   // Member data
 
-  // Input arrays to NAM
+  // Input and output arrays for the internal mono chain.
   std::vector<std::vector<iplug::sample>> mInputArray;
-  // Output from NAM
+  std::vector<std::vector<iplug::sample>> mPreModelInputArray;
+  std::vector<std::vector<iplug::sample>> mPreModelOutputArray;
   std::vector<std::vector<iplug::sample>> mOutputArray;
   // Pointer versions
   iplug::sample** mInputPointers = nullptr;
+  iplug::sample** mPreModelInputPointers = nullptr;
+  iplug::sample** mPreModelOutputPointers = nullptr;
   iplug::sample** mOutputPointers = nullptr;
 
   // Input and output gain
   double mInputGain = 1.0;
   double mOutputGain = 1.0;
+  double mPreModelMix = 0.0;
 
   // Noise gates
   dsp::noise_gate::Trigger mNoiseGateTrigger;
   dsp::noise_gate::Gain mNoiseGateGain;
-  // The model actually being used:
-  std::unique_ptr<ResamplingNAM> mModel;
+  ModelSlot mPreModelSlot{kCtrlTagPreModelFileBrowser, kPreModelSlim};
+  ModelSlot mAmpModelSlot{kCtrlTagModelFileBrowser, kSlim};
   // And the IR
   std::unique_ptr<dsp::ImpulseResponse> mIR;
-  // Manages switching what DSP is being used.
-  std::unique_ptr<ResamplingNAM> mStagedModel;
   std::unique_ptr<dsp::ImpulseResponse> mStagedIR;
-  // Flags to take away the modules at a safe time.
-  std::atomic<bool> mShouldRemoveModel = false;
   std::atomic<bool> mShouldRemoveIR = false;
-
-  std::atomic<bool> mNewModelLoadedInDSP = false;
-  std::atomic<bool> mModelCleared = false;
 
   // Tone stack modules
   std::unique_ptr<dsp::tone_stack::AbstractToneStack> mToneStack;
@@ -314,8 +349,6 @@ private:
   recursive_linear_filter::HighPass mHighPass;
   //  recursive_linear_filter::LowPass mLowPass;
 
-  // Path to model's config.json or model.nam
-  WDL_String mNAMPath;
   // Path to IR (.wav file)
   WDL_String mIRPath;
 

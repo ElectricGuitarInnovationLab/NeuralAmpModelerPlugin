@@ -17,6 +17,18 @@ The included amplifier models and impulse responses were created by the RATLab a
 > - Portions of this project are derived from **Neural Amp Modeler**, which is licensed under the MIT License. See `THIRD_PARTY.md`.
 > - The included `.nam` models, `.wav` impulse responses, and other audio assets are licensed separately under **CC BY 4.0**. See `ASSETS_LICENSE.md`.
 
+## Using an additional model
+
+Click the **+** button above the main amp-model selector to add an optional
+NAM model at the front of the signal chain. The added stage has independent
+bypass, input trim, output trim, and CPU/Quality controls. Use its **-** button
+to remove the stage.
+
+The pre-model selection and controls are included in DAW project state and in
+presets saved from the plugin settings page. Model and IR files are referenced
+by path, so keep those files available at their original locations when
+recalling a preset.
+
 ## Building
 
 Puke Amp inherits much of its build system from the original Neural Amp Modeler project.
@@ -176,8 +188,8 @@ Successful releases produce:
 
 ```text
 NeuralAmpModeler/build-vst3/mac/release/Puke Amp.vst3
-NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS-0.7.15.zip
-NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS-0.7.15.dmg
+NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS-0.7.16.zip
+NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS-0.7.16.dmg
 ```
 
 The plugin ZIP and DMG use separate notarization submissions so both artifacts
