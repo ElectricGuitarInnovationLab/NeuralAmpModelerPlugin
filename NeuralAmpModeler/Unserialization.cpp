@@ -57,6 +57,22 @@ void NeuralAmpModeler::_UnserializeApplyConfig(nlohmann::json& config)
   mNAMPath.Set(static_cast<std::string>(config["NAMPath"]).c_str());
   mIRPath.Set(static_cast<std::string>(config["IRPath"]).c_str());
 
+  for (int slot = 0; slot < kMaxFXSlots; ++slot)
+  {
+    mFXSlots[slot]->shouldRemove = true;
+    mFXSlots[slot]->path.Set("");
+  }
+  if (config.contains("FXPaths"))
+  {
+    const auto& paths = config["FXPaths"];
+    for (int slot = 0; slot < kMaxFXSlots && slot < static_cast<int>(paths.size()); ++slot)
+    {
+      const std::string path = paths[slot];
+      if (!path.empty())
+        _StageFXModel(slot, WDL_String(path.c_str()));
+    }
+  }
+
   if (mNAMPath.GetLength())
   {
     _StageModel(mNAMPath);
@@ -97,11 +113,67 @@ void _RenameKeys(nlohmann::json& j, std::unordered_map<std::string, std::string>
   }
 }
 
+// v0.7.16
+
+std::vector<std::string> _GetParamNamesFrom_0_7_16()
+{
+  std::vector<std::string> names{"Input", "Threshold", "Bass", "Middle", "Treble", "Output",
+                                 "NoiseGateActive", "ToneStack", "IRToggle", "CalibrateInput",
+                                 "InputCalibrationLevel", "OutputMode", "Slim", "FX Chain Enabled"};
+  for (int slot = 0; slot < kMaxFXSlots; ++slot)
+  {
+    const std::string prefix = "FX " + std::to_string(slot + 1) + " ";
+    names.push_back(prefix + "Enabled");
+    names.push_back(prefix + "Input");
+    names.push_back(prefix + "Output");
+    names.push_back(prefix + "EQ Enabled");
+    names.push_back(prefix + "Bass");
+    names.push_back(prefix + "Middle");
+    names.push_back(prefix + "Treble");
+  }
+  return names;
+}
+
+int _GetConfigFrom_0_7_16(const iplug::IByteChunk& chunk, int startPos, nlohmann::json& config)
+{
+  int pos = startPos;
+  WDL_String path;
+  pos = chunk.GetStr(path, pos);
+  config["NAMPath"] = std::string(path.Get());
+  pos = chunk.GetStr(path, pos);
+  config["IRPath"] = std::string(path.Get());
+  config["FXPaths"] = nlohmann::json::array();
+  for (int slot = 0; slot < kMaxFXSlots; ++slot)
+  {
+    pos = chunk.GetStr(path, pos);
+    config["FXPaths"].push_back(std::string(path.Get()));
+  }
+
+  const auto names = _GetParamNamesFrom_0_7_16();
+  for (const auto& name : names)
+  {
+    double value = 0.0;
+    pos = chunk.Get(&value, pos);
+    config[name] = value;
+  }
+  return pos;
+}
+
 // v0.7.14
 
 void _UpdateConfigFrom_0_7_14(nlohmann::json& config)
 {
-  // Fill me in once something changes!
+  config["FXPaths"] = nlohmann::json::array();
+  for (int slot = 0; slot < kMaxFXSlots; ++slot)
+    config["FXPaths"].push_back("");
+  config["FX Chain Enabled"] = 1.0;
+  const auto names = _GetParamNamesFrom_0_7_16();
+  for (size_t index = 14; index < names.size(); ++index)
+  {
+    const int offset = static_cast<int>((index - 14) % kNumFXParamsPerSlot);
+    config[names[index]] = (offset == kFXBassOffset || offset == kFXMidOffset || offset == kFXTrebleOffset) ? 5.0 :
+                           (offset == kFXInputOffset || offset == kFXOutputOffset) ? 0.0 : 1.0;
+  }
 }
 
 int _GetConfigFrom_0_7_14(const iplug::IByteChunk& chunk, int startPos, nlohmann::json& config)
@@ -277,7 +349,11 @@ int NeuralAmpModeler::_UnserializeStateWithKnownVersion(const iplug::IByteChunk&
   _Version version(versionStr);
   // Act accordingly
   nlohmann::json config;
-  if (version >= _Version(0, 7, 14))
+  if (version >= _Version(0, 7, 16))
+  {
+    pos = _GetConfigFrom_0_7_16(chunk, pos, config);
+  }
+  else if (version >= _Version(0, 7, 14))
   {
     pos = _GetConfigFrom_0_7_14(chunk, pos, config);
   }

@@ -79,6 +79,8 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
 : Plugin(info, MakeConfig(kNumParams, kNumPresets))
 {
   _InitToneStack();
+  for (auto& slot : mFXSlots)
+    slot = std::make_unique<FXModelSlot>();
   nam::activations::Activation::enable_fast_tanh();
   GetParam(kInputLevel)->InitGain("Input", 0.0, -20.0, 20.0, 0.1);
   GetParam(kToneBass)->InitDouble("Bass", 5.0, 0.0, 10.0, 0.1);
@@ -94,6 +96,18 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
   GetParam(kInputCalibrationLevel)
     ->InitDouble(kInputCalibrationLevelParamName.c_str(), kDefaultInputCalibrationLevel, -60.0, 60.0, 0.1, "dBu");
   GetParam(kSlim)->InitDouble("Slim", 1.0, 0.0, 1.0, 0.01);
+  GetParam(kFXChainEnabled)->InitBool("FX Chain Enabled", true);
+  for (int slot = 0; slot < kMaxFXSlots; ++slot)
+  {
+    const std::string prefix = "FX " + std::to_string(slot + 1) + " ";
+    GetParam(FXParamIndex(slot, kFXEnabledOffset))->InitBool((prefix + "Enabled").c_str(), true);
+    GetParam(FXParamIndex(slot, kFXInputOffset))->InitGain((prefix + "Input").c_str(), 0.0, -20.0, 20.0, 0.1);
+    GetParam(FXParamIndex(slot, kFXOutputOffset))->InitGain((prefix + "Output").c_str(), 0.0, -40.0, 40.0, 0.1);
+    GetParam(FXParamIndex(slot, kFXEQActiveOffset))->InitBool((prefix + "EQ Enabled").c_str(), true);
+    GetParam(FXParamIndex(slot, kFXBassOffset))->InitDouble((prefix + "Bass").c_str(), 5.0, 0.0, 10.0, 0.1);
+    GetParam(FXParamIndex(slot, kFXMidOffset))->InitDouble((prefix + "Middle").c_str(), 5.0, 0.0, 10.0, 0.1);
+    GetParam(FXParamIndex(slot, kFXTrebleOffset))->InitDouble((prefix + "Treble").c_str(), 5.0, 0.0, 10.0, 0.1);
+  }
 
   mNoiseGateTrigger.AddListener(&mNoiseGateGain);
 
@@ -124,9 +138,9 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     const auto crossSVG = pGraphics->LoadSVG(CLOSE_BUTTON_FN);
     const auto rightArrowSVG = pGraphics->LoadSVG(RIGHT_ARROW_FN);
     const auto leftArrowSVG = pGraphics->LoadSVG(LEFT_ARROW_FN);
-    const auto modelIconSVG = pGraphics->LoadSVG(MODEL_ICON_FN);
-    const auto irIconOnSVG = pGraphics->LoadSVG(IR_ICON_ON_FN);
-    const auto irIconOffSVG = pGraphics->LoadSVG(IR_ICON_OFF_FN);
+    const auto ampIconSVG = pGraphics->LoadSVG(AMP_ICON_FN);
+    const auto speakerIconSVG = pGraphics->LoadSVG(SPEAKER_ICON_FN);
+    const auto pedalSVG = pGraphics->LoadSVG(PEDAL_ICON_FN);
     const auto slimIconSVG = pGraphics->LoadSVG(SLIMMABLE_ICON_FN);
     const auto logoSVG = pGraphics->LoadSVG(MY_LOGO_FN);
 
@@ -173,7 +187,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
       IRECT(modelArea.R + 6.f, modelArea.MH() - 14.f, modelArea.R + 6.f + 2.f * 28.f, modelArea.MH() + 14.f);
     const auto modelIconArea = modelArea.GetFromLeft(30).GetTranslated(-40, 10);
     const auto irArea = modelArea.GetVShifted(irYOffset);
-    const auto irSwitchArea = irArea.GetFromLeft(30.0f).GetHShifted(-40.0f).GetScaledAboutCentre(0.6f);
+    const auto irIconArea = irArea.GetFromLeft(30.0f).GetTranslated(-40.0f, 10.0f);
 
     // Areas for meters
     const auto inputMeterArea = contentArea.GetFromLeft(30).GetHShifted(-20).GetMidVPadded(100).GetVShifted(-25);
@@ -181,6 +195,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
 
     // Misc Areas
     const auto settingsButtonArea = CornerButtonArea(b);
+    const auto fxButtonArea = titleArea.GetFromRight(80.f).GetFromLeft(40.f).GetCentredInside(28.f, 28.f);
 
     // Model loader button
     auto loadModelCompletionHandler = [&](const WDL_String& fileName, const WDL_String& path) {
@@ -218,9 +233,16 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
 
     pGraphics->AttachBackground(BACKGROUND_FN);
     pGraphics->AttachControl(new IBitmapControl(b, linesBitmap));
-    const auto logoArea = titleArea.GetCentredInside(44.0f, 44.0f);
-pGraphics->AttachControl(new ISVGControl(logoArea, logoSVG));
-    pGraphics->AttachControl(new ISVGControl(modelIconArea, modelIconSVG));
+    const auto logoArea = titleArea.GetFromLeft(44.0f).GetCentredInside(44.0f, 44.0f);
+    pGraphics->AttachControl(new ISVGControl(logoArea, logoSVG));
+    pGraphics->AttachControl(new IVLabelControl(titleArea, "Puke Amp", titleStyle));
+    pGraphics->AttachControl(new ISVGControl(modelIconArea, ampIconSVG));
+    pGraphics->AttachControl(new NAMSquareButtonControl(
+      fxButtonArea, [pGraphics](IControl*) {
+        auto* page = pGraphics->GetControlWithTag(kCtrlTagFXPage)->As<NAMFXPageControl>();
+        page->RefreshFromPlugin();
+        page->HidePage(false);
+      }, pedalSVG), kCtrlTagFXButton)->SetTooltip("Open pedal FX chain");
 
 #ifdef NAM_PICK_DIRECTORY
     const std::string defaultNamFileString = "Select model directory...";
@@ -260,7 +282,7 @@ pGraphics->AttachControl(new ISVGControl(logoArea, logoSVG));
       ->SetAnimationEndActionFunction(showSlimOverlay)
       ->Hide(true);
 
-    pGraphics->AttachControl(new ISVGSwitchControl(irSwitchArea, {irIconOffSVG, irIconOnSVG}, kIRToggle));
+    pGraphics->AttachControl(new ISVGSwitchControl(irIconArea, {speakerIconSVG, speakerIconSVG}, kIRToggle));
     pGraphics->AttachControl(
       new NAMFileBrowserControl(irArea, kMsgTagClearIR, defaultIRString.c_str(), "wav", loadIRCompletionHandler, style,
                                 fileSVG, crossSVG, leftArrowSVG, rightArrowSVG, fileBackgroundBitmap, globeSVG,
@@ -284,6 +306,11 @@ pGraphics->AttachControl(new ISVGControl(logoArea, logoSVG));
     // The meters
     pGraphics->AttachControl(new NAMMeterControl(inputMeterArea, meterBackgroundBitmap, style), kCtrlTagInputMeter);
     pGraphics->AttachControl(new NAMMeterControl(outputMeterArea, meterBackgroundBitmap, style), kCtrlTagOutputMeter);
+
+    pGraphics->AttachControl(
+      new NAMFXPageControl(b, backgroundBitmap, fileBackgroundBitmap, knobBackgroundBitmap, switchHandleBitmap,
+                           crossSVG, fileSVG, leftArrowSVG, rightArrowSVG, globeSVG, style),
+      kCtrlTagFXPage)->Hide(true);
 
     // Settings/help/about box
     pGraphics->AttachControl(new NAMCircleButtonControl(
@@ -357,13 +384,66 @@ void NeuralAmpModeler::ProcessBlock(iplug::sample** inputs, iplug::sample** outp
     triggerOutput = mNoiseGateTrigger.Process(mInputPointers, numChannelsInternal, numFrames);
   }
 
+  // Pedal models run in series before the main amp. Two reusable mono buffers
+  // avoid allocations and per-slot audio storage on the real-time thread.
+  sample** ampInput = triggerOutput;
+  sample* fxInputPointers[] = {mFXBufferA.data()};
+  sample* fxOutputPointers[] = {mFXBufferB.data()};
+  const bool fxChainEnabled = GetParam(kFXChainEnabled)->Bool();
+  const double mixStep = sampleRate > 0.0 ? 1.0 / (0.01 * sampleRate) : 1.0;
+  for (int slotIndex = 0; slotIndex < kMaxFXSlots; ++slotIndex)
+  {
+    auto& slot = *mFXSlots[slotIndex];
+    if (!slot.model)
+      continue;
+
+    const bool targetActive = fxChainEnabled && !slot.removing &&
+                              GetParam(FXParamIndex(slotIndex, kFXEnabledOffset))->Bool();
+    if (!targetActive && slot.wetMix <= 0.0)
+    {
+      if (slot.removing)
+      {
+        slot.model = nullptr;
+        slot.removing = false;
+        mFXPageNeedsRefresh = true;
+        _UpdateLatency();
+      }
+      continue;
+    }
+
+    const double inputGain = DBToAmp(GetParam(FXParamIndex(slotIndex, kFXInputOffset))->Value());
+    const double outputGain = DBToAmp(GetParam(FXParamIndex(slotIndex, kFXOutputOffset))->Value());
+    for (size_t frame = 0; frame < numFrames; ++frame)
+    {
+      mFXDryBuffer[frame] = ampInput[0][frame];
+      mFXBufferA[frame] = inputGain * mFXDryBuffer[frame];
+    }
+
+    slot.model->process(fxInputPointers, fxOutputPointers, nFrames);
+    sample** pedalOutput = fxOutputPointers;
+    if (GetParam(FXParamIndex(slotIndex, kFXEQActiveOffset))->Bool())
+    {
+      slot.toneStack->SetParam("bass", GetParam(FXParamIndex(slotIndex, kFXBassOffset))->Value());
+      slot.toneStack->SetParam("middle", GetParam(FXParamIndex(slotIndex, kFXMidOffset))->Value());
+      slot.toneStack->SetParam("treble", GetParam(FXParamIndex(slotIndex, kFXTrebleOffset))->Value());
+      pedalOutput = slot.toneStack->Process(fxOutputPointers, numChannelsInternal, nFrames);
+    }
+    for (size_t frame = 0; frame < numFrames; ++frame)
+    {
+      slot.wetMix = std::clamp(slot.wetMix + (targetActive ? mixStep : -mixStep), 0.0, 1.0);
+      const double wet = outputGain * pedalOutput[0][frame];
+      mFXBufferA[frame] = ((1.0 - slot.wetMix) * mFXDryBuffer[frame]) + (slot.wetMix * wet);
+    }
+    ampInput = fxInputPointers;
+  }
+
   if (mModel != nullptr)
   {
-    mModel->process(triggerOutput, mOutputPointers, nFrames);
+    mModel->process(ampInput, mOutputPointers, nFrames);
   }
   else
   {
-    _FallbackDSP(triggerOutput, mOutputPointers, numChannelsInternal, numFrames);
+    _FallbackDSP(ampInput, mOutputPointers, numChannelsInternal, numFrames);
   }
   // Apply the noise gate after the NAM
   sample** gateGainOutput =
@@ -430,6 +510,11 @@ void NeuralAmpModeler::OnIdle()
       mNewModelLoadedInDSP = false;
     }
   }
+  if (mFXPageNeedsRefresh)
+  {
+    _RefreshFXPage();
+    mFXPageNeedsRefresh = false;
+  }
   if (mModelCleared)
   {
     if (auto* pGraphics = GetUI())
@@ -461,6 +546,8 @@ bool NeuralAmpModeler::SerializeState(IByteChunk& chunk) const
   // when we unserialize)
   chunk.PutStr(mNAMPath.Get());
   chunk.PutStr(mIRPath.Get());
+  for (const auto& slot : mFXSlots)
+    chunk.PutStr(slot->path.Get());
   return SerializeParams(chunk);
 }
 
@@ -506,6 +593,7 @@ void NeuralAmpModeler::OnUIOpen()
   {
     _UpdateControlsFromModel();
   }
+  _RefreshFXPage();
 }
 
 void NeuralAmpModeler::OnParamChange(int paramIdx)
@@ -524,7 +612,11 @@ void NeuralAmpModeler::OnParamChange(int paramIdx)
     case kToneMid: mToneStack->SetParam("middle", GetParam(paramIdx)->Value()); break;
     case kToneTreble: mToneStack->SetParam("treble", GetParam(paramIdx)->Value()); break;
     case kSlim: _ApplySlimParamToLoadedNAMs(); break;
-    default: break;
+    case kFXChainEnabled: _UpdateLatency(); break;
+    default:
+      if (paramIdx >= kFXParamBase && ((paramIdx - kFXParamBase) % kNumFXParamsPerSlot) == kFXEnabledOffset)
+        _UpdateLatency();
+      break;
   }
 }
 
@@ -541,7 +633,10 @@ void NeuralAmpModeler::OnParamChangeUI(int paramIdx, EParamSource source)
         pGraphics->ForControlInGroup("EQ_KNOBS", [active](IControl* pControl) { pControl->SetDisabled(!active); });
         break;
       case kIRToggle: pGraphics->GetControlWithTag(kCtrlTagIRFileBrowser)->SetDisabled(!active); break;
-      default: break;
+      default:
+        if (paramIdx >= kFXParamBase && ((paramIdx - kFXParamBase) % kNumFXParamsPerSlot) == kFXEQActiveOffset)
+          _RefreshFXPage();
+        break;
     }
   }
 }
@@ -552,6 +647,7 @@ bool NeuralAmpModeler::OnMessage(int msgTag, int ctrlTag, int dataSize, const vo
   {
     case kMsgTagClearModel: mShouldRemoveModel = true; return true;
     case kMsgTagClearIR: mShouldRemoveIR = true; return true;
+    case kMsgTagClearFXModel: ClearFXModel(mFXEditorSlot.load()); return true;
     case kMsgTagHighlightColor:
     {
       mHighLightColor.Set((const char*)pData);
@@ -578,6 +674,54 @@ bool NeuralAmpModeler::OnMessage(int msgTag, int ctrlTag, int dataSize, const vo
   }
 }
 
+std::string NeuralAmpModeler::StageFXModel(int slot, const WDL_String& modelPath)
+{
+  return _StageFXModel(slot, modelPath);
+}
+
+void NeuralAmpModeler::ClearFXModel(int slot)
+{
+  if (slot < 0 || slot >= kMaxFXSlots)
+    return;
+  mFXSlots[slot]->shouldRemove = true;
+  mFXSlots[slot]->path.Set("");
+  mFXPageNeedsRefresh = true;
+}
+
+void NeuralAmpModeler::MoveFXModel(int from, int to)
+{
+  if (from < 0 || from >= kMaxFXSlots || to < 0 || to >= kMaxFXSlots || from == to)
+    return;
+  if (mPendingFXMove.load() != -1)
+    return;
+
+  for (int offset = 0; offset < kNumFXParamsPerSlot; ++offset)
+  {
+    const int fromParam = kFXParamBase + from * kNumFXParamsPerSlot + offset;
+    const int toParam = kFXParamBase + to * kNumFXParamsPerSlot + offset;
+    const double fromValue = GetParam(fromParam)->GetNormalized();
+    const double toValue = GetParam(toParam)->GetNormalized();
+    GetParam(fromParam)->SetNormalized(toValue);
+    GetParam(toParam)->SetNormalized(fromValue);
+    SendParameterValueFromDelegate(fromParam, toValue, true);
+    SendParameterValueFromDelegate(toParam, fromValue, true);
+  }
+  mPendingFXMove = from * kMaxFXSlots + to;
+}
+
+const WDL_String& NeuralAmpModeler::GetFXModelPath(int slot) const
+{
+  static WDL_String empty;
+  if (slot < 0 || slot >= kMaxFXSlots)
+    return empty;
+  return mFXSlots[slot]->path;
+}
+
+void NeuralAmpModeler::SetFXEditorSlot(int slot)
+{
+  mFXEditorSlot = std::clamp(slot, 0, kMaxFXSlots - 1);
+}
+
 // Private methods ============================================================
 
 void NeuralAmpModeler::_AllocateIOPointers(const size_t nChans)
@@ -596,6 +740,16 @@ void NeuralAmpModeler::_AllocateIOPointers(const size_t nChans)
 
 void NeuralAmpModeler::_ApplyDSPStaging()
 {
+  const int pendingMove = mPendingFXMove.exchange(-1);
+  if (pendingMove >= 0)
+  {
+    const int from = pendingMove / kMaxFXSlots;
+    const int to = pendingMove % kMaxFXSlots;
+    std::swap(mFXSlots[from], mFXSlots[to]);
+    mFXPageNeedsRefresh = true;
+    _UpdateLatency();
+  }
+
   // Remove marked modules
   if (mShouldRemoveModel)
   {
@@ -628,6 +782,25 @@ void NeuralAmpModeler::_ApplyDSPStaging()
     mIR = std::move(mStagedIR);
     mStagedIR = nullptr;
   }
+  for (auto& slot : mFXSlots)
+  {
+    if (slot->shouldRemove.exchange(false))
+    {
+      slot->stagedModel = nullptr;
+      slot->path.Set("");
+      slot->removing = true;
+      mFXPageNeedsRefresh = true;
+      _UpdateLatency();
+    }
+    if (slot->stagedModel)
+    {
+      slot->model = std::move(slot->stagedModel);
+      slot->removing = false;
+      slot->wetMix = 0.0;
+      mFXPageNeedsRefresh = true;
+      _UpdateLatency();
+    }
+  }
 }
 
 void NeuralAmpModeler::_DeallocateIOPointers()
@@ -653,7 +826,7 @@ void NeuralAmpModeler::_FallbackDSP(iplug::sample** inputs, iplug::sample** outp
 {
   for (auto c = 0; c < numChannels; c++)
     for (auto s = 0; s < numFrames; s++)
-      mOutputArray[c][s] = mInputArray[c][s];
+      outputs[c][s] = inputs[c][s];
 }
 
 void NeuralAmpModeler::_ResetModelAndIR(const double sampleRate, const int maxBlockSize)
@@ -666,6 +839,15 @@ void NeuralAmpModeler::_ResetModelAndIR(const double sampleRate, const int maxBl
   else if (mModel != nullptr)
   {
     mModel->Reset(sampleRate, maxBlockSize);
+  }
+
+  for (auto& slot : mFXSlots)
+  {
+    if (slot->stagedModel)
+      slot->stagedModel->Reset(sampleRate, maxBlockSize);
+    else if (slot->model)
+      slot->model->Reset(sampleRate, maxBlockSize);
+    slot->toneStack->Reset(sampleRate, maxBlockSize);
   }
 
   // IR
@@ -789,6 +971,40 @@ std::string NeuralAmpModeler::_StageModel(const WDL_String& modelPath)
   return "";
 }
 
+std::string NeuralAmpModeler::_StageFXModel(int slotIndex, const WDL_String& modelPath)
+{
+  if (slotIndex < 0 || slotIndex >= kMaxFXSlots)
+    return "Invalid pedal slot.";
+
+  auto& slot = *mFXSlots[slotIndex];
+  WDL_String previousPath = slot.path;
+  try
+  {
+    auto dspPath = std::filesystem::u8path(modelPath.Get());
+    std::unique_ptr<nam::DSP> model = nam::get_dsp(dspPath);
+    if (model->NumInputChannels() != 1 || model->NumOutputChannels() != 1)
+      throw std::runtime_error("Pedal model must have one input and one output channel.");
+
+    auto staged = std::make_unique<ResamplingNAM>(std::move(model), GetSampleRate());
+    staged->Reset(GetSampleRate(), GetBlockSize());
+    if (nam::SlimmableModel* slimmable = staged->GetSlimmableModel())
+      slimmable->SetSlimmableSize(1.0);
+
+    slot.stagedModel = std::move(staged);
+    slot.shouldRemove = false;
+    slot.path = modelPath;
+    mFXPageNeedsRefresh = true;
+  }
+  catch (const std::exception& e)
+  {
+    slot.stagedModel = nullptr;
+    slot.path = previousPath;
+    mFXPageNeedsRefresh = true;
+    return e.what();
+  }
+  return "";
+}
+
 dsp::wav::LoadReturnCode NeuralAmpModeler::_StageIR(const WDL_String& irPath)
 {
   // FIXME it'd be better for the path to be "staged" as well. Just in case the
@@ -870,6 +1086,9 @@ void NeuralAmpModeler::_PrepareBuffers(const size_t numChannels, const size_t nu
       mOutputArray[c].resize(numFrames);
       std::fill(mOutputArray[c].begin(), mOutputArray[c].end(), 0.0);
     }
+    mFXBufferA.resize(numFrames);
+    mFXBufferB.resize(numFrames);
+    mFXDryBuffer.resize(numFrames);
   }
   // Would these ever get changed by something?
   for (auto c = 0; c < mInputArray.size(); c++)
@@ -966,12 +1185,27 @@ void NeuralAmpModeler::_UpdateControlsFromModel()
   }
 }
 
+void NeuralAmpModeler::_RefreshFXPage()
+{
+  if (auto* ui = GetUI())
+  {
+    if (auto* page = ui->GetControlWithTag(kCtrlTagFXPage))
+      page->As<NAMFXPageControl>()->RefreshFromPlugin();
+  }
+}
+
 void NeuralAmpModeler::_UpdateLatency()
 {
   int latency = 0;
   if (mModel)
   {
     latency += mModel->GetLatency();
+  }
+  if (GetParam(kFXChainEnabled)->Bool())
+  {
+    for (int slot = 0; slot < kMaxFXSlots; ++slot)
+      if (mFXSlots[slot]->model && GetParam(FXParamIndex(slot, kFXEnabledOffset))->Bool())
+        latency += mFXSlots[slot]->model->GetLatency();
   }
   // Other things that add latency here...
 

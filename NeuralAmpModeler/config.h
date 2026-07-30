@@ -1,7 +1,7 @@
 #define PLUG_NAME "Puke Amp"
 #define PLUG_MFR "Puke"
-#define PLUG_VERSION_HEX 0x0000070f
-#define PLUG_VERSION_STR "0.7.15"
+#define PLUG_VERSION_HEX 0x00000710
+#define PLUG_VERSION_STR "0.7.16"
 #define PLUG_UNIQUE_ID 'PkAm'
 #define PLUG_MFR_ID 'SDAa'
 #define PLUG_URL_STR "https://github.com/ElectricGuitarInnovationLab/NeuralAmpModelerPlugin"
@@ -64,9 +64,9 @@
 #define CLOSE_BUTTON_FN "Cross.svg"
 #define LEFT_ARROW_FN "ArrowLeft.svg"
 #define RIGHT_ARROW_FN "ArrowRight.svg"
-#define MODEL_ICON_FN "ModelIcon.svg"
-#define IR_ICON_ON_FN "IRIconOn.svg"
-#define IR_ICON_OFF_FN "IRIconOff.svg"
+#define AMP_ICON_FN "amp.svg"
+#define SPEAKER_ICON_FN "speaker.svg"
+#define PEDAL_ICON_FN "pedal.svg"
 #define GLOBE_ICON_FN "Globe.svg"
 #define SLIMMABLE_ICON_FN "SlimmableIcon.svg"
 

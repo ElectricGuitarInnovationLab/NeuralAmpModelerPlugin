@@ -14,10 +14,25 @@
 #include "IPlug_include_in_plug_hdr.h"
 #include "ISender.h"
 
+#include <array>
+
 
 const int kNumPresets = 1;
 // The plugin is mono inside
 constexpr size_t kNumChannelsInternal = 1;
+constexpr int kMaxFXSlots = 8;
+constexpr int kNumFXParamsPerSlot = 7;
+
+enum EFXSlotParam
+{
+  kFXEnabledOffset = 0,
+  kFXInputOffset,
+  kFXOutputOffset,
+  kFXEQActiveOffset,
+  kFXBassOffset,
+  kFXMidOffset,
+  kFXTrebleOffset
+};
 
 class NAMSender : public iplug::IPeakAvgSender<>
 {
@@ -47,8 +62,19 @@ enum EParams
   kInputCalibrationLevel,
   kOutputMode,
   kSlim,
-  kNumParams
+  // Append-only parameter bank: changing the existing indices breaks old sessions.
+  kFXChainEnabled,
+  kFXParamBase,
+  kNumParams = kFXParamBase + (kMaxFXSlots * kNumFXParamsPerSlot)
 };
+
+static_assert(kFXParamBase == 14, "Existing plugin parameter indices must remain stable");
+static_assert(kNumParams == 70, "Update state migration when the parameter count changes");
+
+constexpr int FXParamIndex(const int slot, const EFXSlotParam offset)
+{
+  return kFXParamBase + (slot * kNumFXParamsPerSlot) + static_cast<int>(offset);
+}
 
 const int numKnobs = 6;
 
@@ -65,6 +91,9 @@ enum ECtrlTags
   kCtrlTagSlimmableIcon,
   kCtrlTagSlimOverlayBackdrop,
   kCtrlTagSlimKnob,
+  kCtrlTagFXButton,
+  kCtrlTagFXPage,
+  kCtrlTagFXFileBrowser,
   kNumCtrlTags
 };
 
@@ -73,6 +102,7 @@ enum EMsgTags
   // These tags are used from UI -> DSP
   kMsgTagClearModel = 0,
   kMsgTagClearIR,
+  kMsgTagClearFXModel,
   kMsgTagHighlightColor,
   // The following tags are from DSP -> UI
   kMsgTagLoadFailed,
@@ -193,6 +223,22 @@ private:
   std::function<void(NAM_SAMPLE**, NAM_SAMPLE**, int)> mBlockProcessFunc;
 };
 
+struct FXModelSlot
+{
+  FXModelSlot()
+  : toneStack(std::make_unique<dsp::tone_stack::BasicNamToneStack>())
+  {
+  }
+
+  std::unique_ptr<ResamplingNAM> model;
+  std::unique_ptr<ResamplingNAM> stagedModel;
+  std::unique_ptr<dsp::tone_stack::AbstractToneStack> toneStack;
+  WDL_String path;
+  std::atomic<bool> shouldRemove = false;
+  bool removing = false;
+  double wetMix = 0.0;
+};
+
 class NeuralAmpModeler final : public iplug::Plugin
 {
 public:
@@ -211,6 +257,12 @@ public:
   void OnParamChange(int paramIdx) override;
   void OnParamChangeUI(int paramIdx, iplug::EParamSource source) override;
   bool OnMessage(int msgTag, int ctrlTag, int dataSize, const void* pData) override;
+
+  std::string StageFXModel(int slot, const WDL_String& modelPath);
+  void ClearFXModel(int slot);
+  void MoveFXModel(int from, int to);
+  const WDL_String& GetFXModelPath(int slot) const;
+  void SetFXEditorSlot(int slot);
 
 private:
   // Allocates mInputPointers and mOutputPointers
@@ -231,6 +283,7 @@ private:
   // Loads a NAM model and stores it to mStagedNAM
   // Returns an empty string on success, or an error message on failure.
   std::string _StageModel(const WDL_String& dspFile);
+  std::string _StageFXModel(int slot, const WDL_String& dspFile);
   // Loads an IR and stores it to mStagedIR.
   // Return status code so that error messages can be relayed if
   // it wasn't successful.
@@ -256,6 +309,7 @@ private:
   void _SetInputGain();
   void _SetOutputGain();
   void _ApplySlimParamToLoadedNAMs();
+  void _RefreshFXPage();
 
   // See: Unserialization.cpp
   void _UnserializeApplyConfig(nlohmann::json& config);
@@ -282,6 +336,9 @@ private:
   std::vector<std::vector<iplug::sample>> mInputArray;
   // Output from NAM
   std::vector<std::vector<iplug::sample>> mOutputArray;
+  std::vector<iplug::sample> mFXBufferA;
+  std::vector<iplug::sample> mFXBufferB;
+  std::vector<iplug::sample> mFXDryBuffer;
   // Pointer versions
   iplug::sample** mInputPointers = nullptr;
   iplug::sample** mOutputPointers = nullptr;
@@ -300,12 +357,16 @@ private:
   // Manages switching what DSP is being used.
   std::unique_ptr<ResamplingNAM> mStagedModel;
   std::unique_ptr<dsp::ImpulseResponse> mStagedIR;
+  std::array<std::unique_ptr<FXModelSlot>, kMaxFXSlots> mFXSlots;
   // Flags to take away the modules at a safe time.
   std::atomic<bool> mShouldRemoveModel = false;
   std::atomic<bool> mShouldRemoveIR = false;
 
   std::atomic<bool> mNewModelLoadedInDSP = false;
   std::atomic<bool> mModelCleared = false;
+  std::atomic<bool> mFXPageNeedsRefresh = false;
+  std::atomic<int> mFXEditorSlot = 0;
+  std::atomic<int> mPendingFXMove = -1;
 
   // Tone stack modules
   std::unique_ptr<dsp::tone_stack::AbstractToneStack> mToneStack;

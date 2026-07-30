@@ -6,6 +6,7 @@ This repository contains:
 
 - The Puke Amp plugin source and build configuration based on **iPlug2**.
 - A collection of `.nam` amplifier models (in `Models/NAM`)
+- A collection of `.nam` pedal models (in `Models/FX`)
 - A collection of `.wav` impulse responses (IRs) (in `Models/IR`)
 - Supporting assets and documentation developed as part of the **Puke Studio** project.
 
@@ -16,6 +17,12 @@ The included amplifier models and impulse responses were created by the RATLab a
 > - The **Puke Amp software** is licensed under the GNU Affero General Public License v3.0 (AGPLv3). See `LICENSE`.
 > - Portions of this project are derived from **Neural Amp Modeler**, which is licensed under the MIT License. See `THIRD_PARTY.md`.
 > - The included `.nam` models, `.wav` impulse responses, and other audio assets are licensed separately under **CC BY 4.0**. See `ASSETS_LICENSE.md`.
+
+## Pedal FX chain
+
+Put pedal capture `.nam` files under `Models/FX` to make them available in the pedal browser. Click the pedal icon in the upper-left of the plugin to open the FX-chain screen. The chain supports up to eight ordered slots before the main amp model and IR. Each slot has bypass, input and output trim, and an independent three-band EQ. Pedal model CPU/Quality is fixed at `1.0`.
+
+The arrow buttons move the selected pedal in the chain, and the global FX CHAIN switch bypasses all pedal slots. Pedal paths, order, bypass states, trims, and EQ settings are included in DAW state and `.fxp` presets.
 
 ## Building
 
@@ -31,7 +38,7 @@ The original GitHub Actions workflows in the Neural Amp Modeler project also ser
 
 ### Building Puke Amp VST3
 
-The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/NAM` and `Models/IR`. The Windows artifact also contains `Puke Amp-VST3-Windows-Setup.exe`.
+The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/NAM`, `Models/FX`, and `Models/IR`. The Windows artifact also contains `Puke Amp-VST3-Windows-Setup.exe`.
 
 #### Compiling the VST3 locally on macOS
 
@@ -176,8 +183,8 @@ Successful releases produce:
 
 ```text
 NeuralAmpModeler/build-vst3/mac/release/Puke Amp.vst3
-NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS-0.7.15.zip
-NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS-0.7.15.dmg
+NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS-0.7.16.zip
+NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS-0.7.16.dmg
 ```
 
 The plugin ZIP and DMG use separate notarization submissions so both artifacts

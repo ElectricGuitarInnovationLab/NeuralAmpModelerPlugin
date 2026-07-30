@@ -269,8 +269,8 @@ public:
                         IFileDialogCompletionHandlerFunc ch, const IVStyle& style, const ISVG& loadSVG,
                         const ISVG& clearSVG, const ISVG& leftSVG, const ISVG& rightSVG, const IBitmap& bitmap,
                         const ISVG& globeSVG, const char* getButtonLabel, const char* getButtonURL,
-                        const char* bundledModelsSubdirectory)
-  : IDirBrowseControlBase(bounds, fileExtension, false, false)
+                        const char* bundledModelsSubdirectory, bool scanRecursively = false)
+  : IDirBrowseControlBase(bounds, fileExtension, false, scanRecursively)
   , mClearMsgTag(clearMsgTag)
   , mDefaultLabelStr(labelStr)
   , mCompletionHandlerFunc(ch)
@@ -415,6 +415,21 @@ public:
 
     // initialize control visibility
     SetBrowserState(NAMBrowserState::Empty);
+  }
+
+  void ClearDisplayedFile()
+  {
+    if (mFileNameControl)
+      mFileNameControl->SetLabelAndTooltip(mDefaultLabelStr.Get());
+    mSelectedItemIndex = -1;
+    SetBrowserState(NAMBrowserState::Empty);
+  }
+
+  void SetDisplayedFile(const WDL_String& fileName)
+  {
+    if (!mFileNameControl)
+      return;
+    OnMsgFromDelegate(kMsgTagLoadedModel, fileName.GetLength(), fileName.Get());
   }
 
   void LoadFileAtCurrentIndex()
@@ -757,6 +772,199 @@ public:
     }
     mTabLabels.Get(2)->Set(ss.str().c_str());
   };
+};
+
+class NAMFXPageControl : public IContainerBaseWithNamedChildren
+{
+public:
+  NAMFXPageControl(const IRECT& bounds, const IBitmap& background, const IBitmap& fileBackground,
+                   const IBitmap& knobBackground, const IBitmap& switchBitmap, const ISVG& closeSVG,
+                   const ISVG& fileSVG, const ISVG& leftSVG, const ISVG& rightSVG, const ISVG& globeSVG,
+                   const IVStyle& style)
+  : IContainerBaseWithNamedChildren(bounds)
+  , mBackground(background)
+  , mFileBackground(fileBackground)
+  , mKnobBackground(knobBackground)
+  , mSwitchBitmap(switchBitmap)
+  , mCloseSVG(closeSVG)
+  , mFileSVG(fileSVG)
+  , mLeftSVG(leftSVG)
+  , mRightSVG(rightSVG)
+  , mGlobeSVG(globeSVG)
+  , mStyle(style)
+  {
+    mIgnoreMouse = false;
+  }
+
+  bool OnKeyDown(float x, float y, const IKeyPress& key) override
+  {
+    if (key.VK == kVK_ESCAPE)
+    {
+      HidePage(true);
+      return true;
+    }
+    return false;
+  }
+
+  void HidePage(bool hide)
+  {
+    Hide(hide);
+    ForAllChildrenFunc([hide](int, IControl* child) { child->Hide(hide); });
+    if (GetUI())
+      GetUI()->SetAllControlsDirty();
+  }
+
+  void RefreshFromPlugin()
+  {
+    auto* plugin = PLUG();
+    for (int slot = 0; slot < kMaxFXSlots; ++slot)
+    {
+      if (mSlotButtons[slot])
+      {
+        std::stringstream label;
+        label << (slot + 1);
+        if (plugin->GetFXModelPath(slot).GetLength())
+          label << " *";
+        mSlotButtons[slot]->SetLabelStr(label.str().c_str());
+      }
+    }
+
+    const WDL_String& path = plugin->GetFXModelPath(mSelectedSlot);
+    if (mBrowser)
+    {
+      if (path.GetLength())
+        mBrowser->SetDisplayedFile(path);
+      else
+        mBrowser->ClearDisplayedFile();
+    }
+    RebindEditorControls();
+  }
+
+  void SelectSlot(int slot)
+  {
+    mSelectedSlot = std::clamp(slot, 0, kMaxFXSlots - 1);
+    PLUG()->SetFXEditorSlot(mSelectedSlot);
+    RefreshFromPlugin();
+  }
+
+  void OnAttached() override
+  {
+    const auto bounds = GetRECT();
+    const auto content = bounds.GetPadded(-22.f);
+    const auto titleStyle = DEFAULT_STYLE.WithValueText(IText(25, COLOR_WHITE, "Michroma-Regular"))
+                              .WithDrawFrame(false);
+    const auto buttonStyle = mStyle.WithShowLabel(false).WithShowValue(true).WithDrawFrame(true);
+
+    AddChildControl(new IBitmapControl(bounds, mBackground))->SetIgnoreMouse(true);
+    AddChildControl(new IVLabelControl(content.GetFromTop(42.f), "PEDAL FX CHAIN", titleStyle));
+    AddChildControl(new NAMSquareButtonControl(
+      CornerButtonArea(bounds), [this](IControl*) { HidePage(true); }, mCloseSVG));
+
+    auto slotArea = content.GetFromTop(34.f).GetVShifted(48.f);
+    for (int slot = 0; slot < kMaxFXSlots; ++slot)
+    {
+      auto cell = slotArea.GetGridCell(0, slot, 1, kMaxFXSlots).GetPadded(-3.f);
+      std::string label = std::to_string(slot + 1);
+      mSlotButtons[slot] = new IVButtonControl(
+        cell, [this, slot](IControl*) { SelectSlot(slot); }, label.c_str(), buttonStyle);
+      AddChildControl(mSlotButtons[slot]);
+    }
+
+    auto browserArea = content.GetFromTop(34.f).GetVShifted(92.f).GetMidHPadded(235.f);
+    auto completion = [this](const WDL_String& fileName, const WDL_String&) {
+      if (!fileName.GetLength())
+        return;
+      const std::string error = PLUG()->StageFXModel(mSelectedSlot, fileName);
+      if (!error.empty())
+      {
+        std::stringstream message;
+        message << "Failed to load pedal NAM model:\n\n" << error;
+        GetUI()->ShowMessageBox(message.str().c_str(), "Failed to load pedal", kMB_OK);
+      }
+      RefreshFromPlugin();
+    };
+    mBrowser = new NAMFileBrowserControl(
+      browserArea, kMsgTagClearFXModel, "Select pedal model...", "nam", completion, mStyle, mFileSVG,
+      mCloseSVG, mLeftSVG, mRightSVG, mFileBackground, mGlobeSVG, "", "", "FX", true);
+    AddChildControl(mBrowser, kCtrlTagFXFileBrowser);
+
+    const auto controlsArea = content.GetFromTop(NAM_KNOB_HEIGHT).GetVShifted(137.f);
+    const char* labels[] = {"INPUT", "OUTPUT", "BASS", "MIDDLE", "TREBLE"};
+    const EFXSlotParam offsets[] = {kFXInputOffset, kFXOutputOffset, kFXBassOffset, kFXMidOffset, kFXTrebleOffset};
+    for (int i = 0; i < 5; ++i)
+    {
+      auto area = controlsArea.GetGridCell(0, i, 1, 5).GetPadded(-3.f);
+      mKnobs[i] = new NAMKnobControl(area, FXParamIndex(0, offsets[i]), labels[i], mStyle, mKnobBackground);
+      AddChildControl(mKnobs[i]);
+    }
+
+    const auto switchesArea = content.GetFromTop(48.f).GetVShifted(263.f);
+    mChainSwitch = new NAMSwitchControl(switchesArea.GetGridCell(0, 0, 1, 4).GetPadded(-5.f), kFXChainEnabled,
+                                        "FX CHAIN", mStyle, mSwitchBitmap);
+    mSlotSwitch = new NAMSwitchControl(switchesArea.GetGridCell(0, 1, 1, 4).GetPadded(-5.f),
+                                       FXParamIndex(0, kFXEnabledOffset), "PEDAL", mStyle, mSwitchBitmap);
+    mEQSwitch = new NAMSwitchControl(switchesArea.GetGridCell(0, 2, 1, 4).GetPadded(-5.f),
+                                     FXParamIndex(0, kFXEQActiveOffset), "PEDAL EQ", mStyle, mSwitchBitmap);
+    AddChildControl(mChainSwitch);
+    AddChildControl(mSlotSwitch);
+    AddChildControl(mEQSwitch);
+
+    const auto editButtons = switchesArea.GetGridCell(0, 3, 1, 4).GetPadded(-3.f);
+    AddChildControl(new IVButtonControl(editButtons.GetGridCell(0, 0, 1, 3).GetPadded(-2.f),
+      [this](IControl*) { if (mSelectedSlot > 0) { PLUG()->MoveFXModel(mSelectedSlot, mSelectedSlot - 1); SelectSlot(mSelectedSlot - 1); } },
+      "<", buttonStyle));
+    AddChildControl(new IVButtonControl(editButtons.GetGridCell(0, 1, 1, 3).GetPadded(-2.f),
+      [this](IControl*) { if (mSelectedSlot + 1 < kMaxFXSlots) { PLUG()->MoveFXModel(mSelectedSlot, mSelectedSlot + 1); SelectSlot(mSelectedSlot + 1); } },
+      ">", buttonStyle));
+    AddChildControl(new IVButtonControl(editButtons.GetGridCell(0, 2, 1, 3).GetPadded(-2.f),
+      [this](IControl*) { PLUG()->ClearFXModel(mSelectedSlot); RefreshFromPlugin(); }, "REMOVE", buttonStyle));
+
+    const auto addArea = content.GetFromBottom(32.f).GetFromLeft(150.f);
+    AddChildControl(new IVButtonControl(addArea, [this](IControl*) {
+      for (int slot = 0; slot < kMaxFXSlots; ++slot)
+      {
+        if (!PLUG()->GetFXModelPath(slot).GetLength())
+        {
+          SelectSlot(slot);
+          return;
+        }
+      }
+    }, "+ ADD PEDAL", buttonStyle));
+
+    SelectSlot(0);
+  }
+
+private:
+  void RebindEditorControls()
+  {
+    const EFXSlotParam offsets[] = {kFXInputOffset, kFXOutputOffset, kFXBassOffset, kFXMidOffset, kFXTrebleOffset};
+    for (int i = 0; i < 5; ++i)
+    {
+      const int paramIdx = FXParamIndex(mSelectedSlot, offsets[i]);
+      mKnobs[i]->SetParamIdx(paramIdx);
+      mKnobs[i]->SetValueFromDelegate(PLUG()->GetParam(paramIdx)->GetNormalized());
+    }
+    const int enabledIdx = FXParamIndex(mSelectedSlot, kFXEnabledOffset);
+    const int eqIdx = FXParamIndex(mSelectedSlot, kFXEQActiveOffset);
+    mSlotSwitch->SetParamIdx(enabledIdx);
+    mSlotSwitch->SetValueFromDelegate(PLUG()->GetParam(enabledIdx)->GetNormalized());
+    mEQSwitch->SetParamIdx(eqIdx);
+    mEQSwitch->SetValueFromDelegate(PLUG()->GetParam(eqIdx)->GetNormalized());
+    const bool eqEnabled = PLUG()->GetParam(eqIdx)->Bool();
+    for (int i = 2; i < 5; ++i)
+      mKnobs[i]->SetDisabled(!eqEnabled);
+  }
+
+  IBitmap mBackground, mFileBackground, mKnobBackground, mSwitchBitmap;
+  ISVG mCloseSVG, mFileSVG, mLeftSVG, mRightSVG, mGlobeSVG;
+  IVStyle mStyle;
+  int mSelectedSlot = 0;
+  std::array<IVButtonControl*, kMaxFXSlots> mSlotButtons{};
+  std::array<NAMKnobControl*, 5> mKnobs{};
+  NAMSwitchControl* mChainSwitch = nullptr;
+  NAMSwitchControl* mSlotSwitch = nullptr;
+  NAMSwitchControl* mEQSwitch = nullptr;
+  NAMFileBrowserControl* mBrowser = nullptr;
 };
 
 class NAMSettingsPageControl : public IContainerBaseWithNamedChildren
