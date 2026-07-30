@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -39,7 +39,7 @@ jobs:
 
       - name: Add MSBuild to PATH
         if: runner.os == 'Windows'
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@v3
 
       - name: Install Inno Setup
         if: runner.os == 'Windows'
@@ -64,7 +64,7 @@ jobs:
         run: NeuralAmpModeler\scripts\make-vst3-win.bat
 
       - name: Upload packaged VST3
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_path }}
