@@ -242,7 +242,12 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     pGraphics->AttachBackground(BACKGROUND_FN);
     pGraphics->AttachControl(new IBitmapControl(b, linesBitmap));
     const auto logoArea = titleArea.GetFromLeft(44.0f).GetCentredInside(44.0f, 44.0f);
-    pGraphics->AttachControl(new ISVGControl(logoArea, logoSVG));
+    pGraphics->AttachControl(new ISVGButtonControl(
+      logoArea, [](IControl* pCaller) {
+        WDL_String url("http://puke.studio");
+        pCaller->GetUI()->OpenURL(url.Get());
+      }, logoSVG, logoSVG))
+      ->SetTooltip("Visit puke.studio");
     pGraphics->AttachControl(new IVLabelControl(titleArea, "Puke Amp", titleStyle));
     pGraphics->AttachControl(new ISVGControl(modelIconArea, ampIconSVG))->SetTooltip("Amp model");
     pGraphics->AttachControl(new NAMSquareButtonControl(
