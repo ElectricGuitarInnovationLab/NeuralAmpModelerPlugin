@@ -15,11 +15,11 @@ jobs:
           - platform: macOS
             os: macos-latest
             artifact_name: Puke-Amp-VST3-macOS
-            artifact_path: NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS.zip
+            artifact_path: NeuralAmpModeler/build-vst3/mac/Puke-Amp-*-macOS.zip
           - platform: Windows
             os: windows-latest
             artifact_name: Puke-Amp-VST3-Windows
-            artifact_path: NeuralAmpModeler/build-vst3/windows/Puke Amp-VST3-Windows*
+            artifact_path: NeuralAmpModeler/build-vst3/windows/Puke-Amp-*-Windows*
 
     steps:
       - name: Check out repository

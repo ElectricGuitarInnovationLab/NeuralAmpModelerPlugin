@@ -26,3 +26,26 @@ For notarized macOS release builds, `scripts/makedist-mac.sh` also accepts:
 - `APP_SPECIFIC_PWD`
 
 These settings only affect installer/package identity. Plug-in identity, DAW compatibility, and saved-session compatibility are controlled elsewhere, including `config.h`, Xcode bundle identifiers, and plug-in format metadata.
+
+## Tag-driven GitHub releases
+
+Pushing a tag such as `v0.2.0` runs `.github/workflows/release-native.yml`. The tag must exactly match `PLUG_VERSION_STR` in `config.h`. After both platform builds pass, the workflow creates a draft GitHub release containing the installers and `SHA256SUMS.txt`. Review and publish the draft in GitHub to make it visible to update checks.
+
+To test macOS signing without creating a tag or release, open **Actions → Release Puke Amp → Run workflow**. Leave **Also build the Windows installer** unchecked. The workflow builds, signs, notarizes, and staples the macOS package, then makes it available as the `release-macos` workflow artifact.
+
+Configure these GitHub Actions secrets before pushing a release tag:
+
+- `MACOS_CERTIFICATE_P12_BASE64`: Base64-encoded PKCS#12 containing the Developer ID Application and Developer ID Installer certificates and private keys.
+- `MACOS_CERTIFICATE_P12_PASSWORD`: Password for that PKCS#12 file.
+- `MACOS_KEYCHAIN_PASSWORD`: Ephemeral CI keychain password.
+- `MACOS_APPLICATION_SIGNING_IDENTITY`: Full Developer ID Application identity.
+- `MACOS_INSTALLER_SIGNING_IDENTITY`: Full Developer ID Installer identity.
+- `APPLE_NOTARY_KEY_BASE64`: Base64-encoded App Store Connect API `.p8` key.
+- `APPLE_NOTARY_KEY_ID`: App Store Connect API key ID.
+- `APPLE_NOTARY_ISSUER_ID`: App Store Connect API issuer ID.
+- `WINDOWS_CERTIFICATE_PFX_BASE64` (optional): Base64-encoded Windows code-signing PFX.
+- `WINDOWS_CERTIFICATE_PASSWORD` (optional): Password for the Windows PFX.
+
+The optional Actions variable `MACOS_PACKAGE_ID` overrides the default package identifier `org.theRATLAB.PukeAmp.VST3`.
+
+If both Windows secrets are absent, the workflow still builds Windows artifacts but names them with an `-Unsigned` suffix. The draft release notes warn that Windows will show an unknown publisher and may display a SmartScreen warning.

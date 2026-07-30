@@ -1,149 +1,258 @@
-name: Release Native
+name: Release Puke Amp
 
 on:
   workflow_dispatch:
+    inputs:
+      build_windows:
+        description: Also build the Windows installer (no release is created)
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
-      - "v*"
+      - "v*.*.*"
 
-env:
-  PROJECT_NAME: NeuralAmpModeler
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  create_release:
-    name: Create release
+  validate:
+    name: Validate release version
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{steps.create_release.outputs.upload_url}}
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+
+      - name: Read and validate version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          config_version="$(sed -n 's/^#define PLUG_VERSION_STR "\([^"]*\)"/\1/p' NeuralAmpModeler/config.h)"
+
+          if [[ ! "${config_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "PLUG_VERSION_STR must have the form MAJOR.MINOR.PATCH." >&2
+            exit 1
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            tag_version="${GITHUB_REF_NAME#v}"
+            if [[ ! "${tag_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Release tag must have the form vMAJOR.MINOR.PATCH." >&2
+              exit 1
+            fi
+
+            if [[ "${tag_version}" != "${config_version}" ]]; then
+              echo "Tag ${GITHUB_REF_NAME} does not match PLUG_VERSION_STR ${config_version}." >&2
+              exit 1
+            fi
+          fi
+
+          echo "version=${config_version}" >> "${GITHUB_OUTPUT}"
+
+  macos:
+    name: Build signed macOS installer
+    needs: validate
+    runs-on: macos-latest
+    env:
+      MACOS_APPLICATION_SIGNING_IDENTITY: ${{ secrets.MACOS_APPLICATION_SIGNING_IDENTITY }}
+      MACOS_INSTALLER_SIGNING_IDENTITY: ${{ secrets.MACOS_INSTALLER_SIGNING_IDENTITY }}
+      MACOS_PACKAGE_ID: ${{ vars.MACOS_PACKAGE_ID || 'org.theRATLAB.PukeAmp.VST3' }}
+      APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+      APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+      RELEASE_BUILD: "1"
+      REQUIRE_NOTARIZATION: "1"
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Create release
-        id: create_release
-        uses: actions/create-release@v1
+      - name: Download VST3 SDK
+        working-directory: iPlug2/Dependencies/IPlug
+        run: ./download-iplug-sdks.sh
+
+      - name: Download iPlug2 prebuilt libraries
+        working-directory: iPlug2/Dependencies
+        run: ./download-prebuilt-libs.sh
+
+      - name: Import Developer ID certificates
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_P12_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${CERTIFICATE_P12_BASE64:?Missing MACOS_CERTIFICATE_P12_BASE64 secret.}"
+          : "${CERTIFICATE_P12_PASSWORD:?Missing MACOS_CERTIFICATE_P12_PASSWORD secret.}"
+          : "${KEYCHAIN_PASSWORD:?Missing MACOS_KEYCHAIN_PASSWORD secret.}"
+          : "${MACOS_APPLICATION_SIGNING_IDENTITY:?Missing MACOS_APPLICATION_SIGNING_IDENTITY secret.}"
+          : "${MACOS_INSTALLER_SIGNING_IDENTITY:?Missing MACOS_INSTALLER_SIGNING_IDENTITY secret.}"
+
+          certificate_path="${RUNNER_TEMP}/release-certificates.p12"
+          keychain_path="${RUNNER_TEMP}/release-signing.keychain-db"
+          printf "%s" "${CERTIFICATE_P12_BASE64}" | base64 -D > "${certificate_path}"
+
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${keychain_path}"
+          security set-keychain-settings -lut 21600 "${keychain_path}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${keychain_path}"
+          security import "${certificate_path}" -k "${keychain_path}" -P "${CERTIFICATE_P12_PASSWORD}" -A -f pkcs12
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${KEYCHAIN_PASSWORD}" "${keychain_path}"
+          security list-keychains -d user -s "${keychain_path}"
+
+          echo "MACOS_RELEASE_KEYCHAIN=${keychain_path}" >> "${GITHUB_ENV}"
+
+      - name: Prepare App Store Connect notarization key
+        shell: bash
+        env:
+          APPLE_NOTARY_KEY_BASE64: ${{ secrets.APPLE_NOTARY_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          : "${APPLE_NOTARY_KEY_BASE64:?Missing APPLE_NOTARY_KEY_BASE64 secret.}"
+          : "${APPLE_NOTARY_KEY_ID:?Missing APPLE_NOTARY_KEY_ID secret.}"
+          : "${APPLE_NOTARY_ISSUER_ID:?Missing APPLE_NOTARY_ISSUER_ID secret.}"
+
+          key_path="${RUNNER_TEMP}/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
+          printf "%s" "${APPLE_NOTARY_KEY_BASE64}" | base64 -D > "${key_path}"
+          chmod 600 "${key_path}"
+          echo "APPLE_NOTARY_KEY_PATH=${key_path}" >> "${GITHUB_ENV}"
+
+      - name: Build, sign, and notarize package
+        run: NeuralAmpModeler/scripts/make-vst3-mac.sh
+
+      - name: Upload macOS release asset
+        uses: actions/upload-artifact@v4
         with:
-          draft: true
-          tag_name: ${{github.ref}}
-          release_name: Release ${{github.ref}}
-          body_path: ${{env.PROJECT_NAME}}/installer/changelog.txt
+          name: release-macos
+          path: NeuralAmpModeler/build-vst3/mac/Puke-Amp-${{ needs.validate.outputs.version }}-macOS.pkg
+          if-no-files-found: error
 
-  build:
-    name: Build
-    needs: create_release
-    runs-on: ${{matrix.os}}
-    strategy:
-      matrix:
-        os: [macos-latest, windows-latest]
-        include:
-          - os: macos-latest
-            build_dir: build-mac
-          - os: windows-latest
-            build_dir: build-win
+      - name: Remove temporary signing material
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${MACOS_RELEASE_KEYCHAIN:-}" ]]; then
+            security delete-keychain "${MACOS_RELEASE_KEYCHAIN}" || true
+          fi
+          rm -f "${RUNNER_TEMP}/release-certificates.p12" "${RUNNER_TEMP}"/AuthKey_*.p8
 
+  windows:
+    name: Build Windows installer
+    if: github.event_name == 'push' || inputs.build_windows
+    needs: validate
+    runs-on: windows-latest
+    env:
+      WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_PFX_BASE64 }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
     steps:
-    - name: Check out repository
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-    - name: Get VST3 SDK
-      run: |
-        cd iPlug2/Dependencies/IPlug
-        ./download-iplug-sdks.sh
-      shell: bash
+      - name: Download VST3 SDK
+        shell: bash
+        working-directory: iPlug2/Dependencies/IPlug
+        run: ./download-iplug-sdks.sh
 
-    - name: Get Prebuilt Libs
-      run: |
-        cd iPlug2/Dependencies
-        ./download-prebuilt-libs.sh
-      shell: bash
+      - name: Download iPlug2 prebuilt libraries
+        shell: bash
+        working-directory: iPlug2/Dependencies
+        run: ./download-prebuilt-libs.sh
 
-    - name: Get Archive Name macOS
-      id: mac_archivename_step
-      if: matrix.os == 'macOS-latest'
-      run: |
-        ARCHIVE_NAME=`python3 iPlug2/Scripts/get_archive_name.py ${{env.PROJECT_NAME}} mac full`
-        echo "archive_name=$ARCHIVE_NAME" >> $GITHUB_OUTPUT
-      shell: bash
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
 
-    - name: Build macOS
-      if: matrix.os == 'macOS-latest'
-      run: |
-        cd ${{env.PROJECT_NAME}}/scripts
-        ./makedist-mac.sh full installer
-      shell: bash
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress --yes
+          }
+          if (-not (Test-Path $iscc)) {
+            throw "Inno Setup compiler was not installed at $iscc"
+          }
 
-    - name: Upload mac DSYMs release asset
-      if: matrix.os == 'macOS-latest'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-      with:
-        upload_url: ${{needs.create_release.outputs.upload_url}}
-        asset_path: ${{env.PROJECT_NAME}}/${{matrix.build_dir}}/out/${{steps.mac_archivename_step.outputs.archive_name}}-dSYMs.zip
-        asset_name: ${{steps.mac_archivename_step.outputs.archive_name}}-dSYMs.zip
-        asset_content_type: application/zip
+      - name: Prepare Windows signing certificate
+        if: env.WINDOWS_CERTIFICATE_PFX_BASE64 != ''
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            throw "WINDOWS_CERTIFICATE_PASSWORD must be set when WINDOWS_CERTIFICATE_PFX_BASE64 is configured."
+          }
 
-    - name: Upload mac dmg release asset
-      if: matrix.os == 'macOS-latest'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-      with:
-        upload_url: ${{needs.create_release.outputs.upload_url}}
-        asset_path: ${{env.PROJECT_NAME}}/${{matrix.build_dir}}/out/${{steps.mac_archivename_step.outputs.archive_name}}.dmg
-        asset_name: ${{steps.mac_archivename_step.outputs.archive_name}}.dmg
-        asset_content_type: application/octet-stream
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'release-certificate.pfx'
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
 
-    - name: Add msbuild to PATH (Windows)
-      if: matrix.os == 'windows-latest'
-      uses: microsoft/setup-msbuild@v1.0.2
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signTool) {
+            throw "signtool.exe was not found."
+          }
 
-    - name: Setup Python3
-      if: matrix.os == 'windows-latest'
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.x'
-        architecture: 'x64'
+          "WINDOWS_CERTIFICATE_PATH=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WINDOWS_SIGNTOOL_PATH=$($signTool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-    - name: Get Archive Name Windows
-      id: win_archivename_step
-      if: matrix.os == 'windows-latest'
-      run: |
-        ARCHIVE_NAME=`python.exe iPlug2/Scripts/get_archive_name.py ${{env.PROJECT_NAME}} win full`
-        echo "archive_name=$ARCHIVE_NAME" >> $GITHUB_OUTPUT
-      shell: bash
+      - name: Build Windows installer
+        shell: cmd
+        run: NeuralAmpModeler\scripts\make-vst3-win.bat
 
-    - name: Build Windows
-      if: matrix.os == 'windows-latest'
-      run: |
-        cd ${{env.PROJECT_NAME}}\scripts
-        .\makedist-win.bat full installer
-      shell: pwsh
+      - name: Upload Windows release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: NeuralAmpModeler/build-vst3/windows/Puke-Amp-${{ needs.validate.outputs.version }}-Windows-Setup*.exe
+          if-no-files-found: error
 
-    - name: Upload Windows pdb release asset
-      if: matrix.os == 'windows-latest'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-      with:
-        upload_url: ${{needs.create_release.outputs.upload_url}}
-        asset_path: ${{env.PROJECT_NAME}}/${{matrix.build_dir}}/out/${{steps.win_archivename_step.outputs.archive_name}}-pdbs.zip
-        asset_name: ${{steps.win_archivename_step.outputs.archive_name}}-pdbs.zip
-        asset_content_type: application/zip
+      - name: Remove temporary signing material
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:WINDOWS_CERTIFICATE_PATH -and (Test-Path $env:WINDOWS_CERTIFICATE_PATH)) {
+            Remove-Item $env:WINDOWS_CERTIFICATE_PATH -Force
+          }
 
-    - name: Upload Windows zip release asset
-      if: matrix.os == 'windows-latest'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-      with:
-        upload_url: ${{needs.create_release.outputs.upload_url}}
-        asset_path: ${{env.PROJECT_NAME}}/${{matrix.build_dir}}/out/${{steps.win_archivename_step.outputs.archive_name}}.zip
-        asset_name: ${{steps.win_archivename_step.outputs.archive_name}}.zip
-        asset_content_type: application/zip
+  release:
+    name: Create draft GitHub release
+    if: github.event_name == 'push'
+    needs: [validate, macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate SHA-256 checksums
+        working-directory: release-assets
+        run: sha256sum Puke-Amp-* > SHA256SUMS.txt
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_notice=""
+          if compgen -G "release-assets/*-Unsigned.exe" > /dev/null; then
+            release_notice="> [!WARNING]
+          > The Windows installer is unsigned. Windows will identify its publisher as Unknown and may display a SmartScreen warning. The macOS package is signed and notarized."
+          fi
+
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag \
+            --draft \
+            --title "Puke Amp ${{ needs.validate.outputs.version }}" \
+            --generate-notes \
+            --notes "${release_notice}" \
+            release-assets/*

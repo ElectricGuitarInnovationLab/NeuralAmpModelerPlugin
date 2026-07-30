@@ -2,8 +2,13 @@
   #define AppVersion "0.0.0"
 #endif
 
+#ifndef ArtifactSuffix
+  #define ArtifactSuffix ""
+#endif
+
 #define PluginName "Puke Amp"
 #define PluginBundle PluginName + ".vst3"
+#define ArtifactBaseName "Puke-Amp-" + AppVersion + "-Windows-Setup" + ArtifactSuffix
 
 [Setup]
 AppId=org.theRATLAB.PukeAmp.VST3
@@ -23,7 +28,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 OutputDir=..\build-vst3\windows
-OutputBaseFilename=Puke Amp-VST3-Windows-Setup
+OutputBaseFilename={#ArtifactBaseName}
 SetupLogging=yes
 UninstallDisplayName={#PluginName} VST3
 

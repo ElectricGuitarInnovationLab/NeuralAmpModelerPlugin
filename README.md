@@ -236,3 +236,12 @@ uninstall entry. Restart the DAW or rescan its plugins after installation.
 The generated installer is not digitally signed. Windows may display an
 Unknown Publisher or SmartScreen warning until the release workflow is
 configured with a Windows code-signing certificate.
+
+
+## Trademark Notice
+
+The included .nam models and impulse responses were independently created by the RATLab from recordings of physical amplifiers and speaker cabinets. References to amplifier and speaker model names are provided solely to identify the equipment used during profiling and do not imply endorsement, affiliation, or sponsorship by their respective manufacturers.
+
+Puke Amp, the RATLab, and the Puke Studio project are not affiliated with, endorsed by, sponsored by, or associated with any amplifier, speaker, or equipment manufacturer.
+
+All trademarks, trade names, and product names are the property of their respective owners.
