@@ -816,7 +816,9 @@ public:
   NAMFXPageControl(const IRECT& bounds, const IBitmap& background, const IBitmap& fileBackground,
                    const IBitmap& knobBackground, const IBitmap& switchBitmap, const ISVG& closeSVG,
                    const ISVG& fileSVG, const ISVG& leftSVG, const ISVG& rightSVG, const ISVG& globeSVG,
-                   const ISVG& effectOffSVG, const ISVG& effectOnSVG, const IVStyle& style)
+                   const ISVG& addPedalSVG, const ISVG& moveLeftSVG, const ISVG& moveRightSVG,
+                   const ISVG& removePedalSVG, const ISVG& effectOffSVG, const ISVG& effectOnSVG,
+                   const IVStyle& style)
   : IContainerBaseWithNamedChildren(bounds)
   , mBackground(background)
   , mFileBackground(fileBackground)
@@ -827,6 +829,10 @@ public:
   , mLeftSVG(leftSVG)
   , mRightSVG(rightSVG)
   , mGlobeSVG(globeSVG)
+  , mAddPedalSVG(addPedalSVG)
+  , mMoveLeftSVG(moveLeftSVG)
+  , mMoveRightSVG(moveRightSVG)
+  , mRemovePedalSVG(removePedalSVG)
   , mEffectOffSVG(effectOffSVG)
   , mEffectOnSVG(effectOnSVG)
   , mStyle(style)
@@ -892,8 +898,6 @@ public:
     const auto content = bounds.GetPadded(-22.f);
     const auto titleStyle = DEFAULT_STYLE.WithValueText(IText(25, COLOR_WHITE, "Michroma-Regular"))
                               .WithDrawFrame(false);
-    const auto buttonStyle = mStyle.WithShowLabel(false).WithShowValue(true).WithDrawFrame(true);
-
     AddChildControl(new IBitmapControl(bounds, mBackground))->SetIgnoreMouse(true);
     AddChildControl(new IVLabelControl(content.GetFromTop(42.f), "PEDAL FX CHAIN", titleStyle));
     auto* closeButton = AddChildControl(new NAMSquareButtonControl(
@@ -944,17 +948,18 @@ public:
     AddChildControl(mSlotSwitch);
 
     const auto editButtons = switchesArea.GetGridCell(0, 3, 1, 4).GetPadded(-3.f);
-    AddChildControl(new IVButtonControl(editButtons.GetGridCell(0, 0, 1, 3).GetPadded(-2.f),
+    AddChildControl(new NAMSquareButtonControl(editButtons.GetGridCell(0, 0, 1, 3).GetPadded(-2.f),
       [this](IControl*) { if (mSelectedSlot > 0) { PLUG()->MoveFXModel(mSelectedSlot, mSelectedSlot - 1); SelectSlot(mSelectedSlot - 1); } },
-      "<", buttonStyle));
-    AddChildControl(new IVButtonControl(editButtons.GetGridCell(0, 1, 1, 3).GetPadded(-2.f),
+      mMoveLeftSVG))->SetTooltip("Move pedal left");
+    AddChildControl(new NAMSquareButtonControl(editButtons.GetGridCell(0, 1, 1, 3).GetPadded(-2.f),
       [this](IControl*) { if (mSelectedSlot + 1 < kMaxFXSlots) { PLUG()->MoveFXModel(mSelectedSlot, mSelectedSlot + 1); SelectSlot(mSelectedSlot + 1); } },
-      ">", buttonStyle));
-    AddChildControl(new IVButtonControl(editButtons.GetGridCell(0, 2, 1, 3).GetPadded(-2.f),
-      [this](IControl*) { PLUG()->ClearFXModel(mSelectedSlot); RefreshFromPlugin(); }, "REMOVE", buttonStyle));
+      mMoveRightSVG))->SetTooltip("Move pedal right");
+    AddChildControl(new NAMSquareButtonControl(editButtons.GetGridCell(0, 2, 1, 3).GetPadded(-2.f),
+      [this](IControl*) { PLUG()->ClearFXModel(mSelectedSlot); RefreshFromPlugin(); }, mRemovePedalSVG))
+      ->SetTooltip("Remove pedal");
 
     const auto addArea = content.GetFromBottom(32.f).GetFromLeft(150.f);
-    AddChildControl(new IVButtonControl(addArea, [this](IControl*) {
+    AddChildControl(new NAMSquareButtonControl(addArea, [this](IControl*) {
       for (int slot = 0; slot < kMaxFXSlots; ++slot)
       {
         if (!PLUG()->GetFXModelPath(slot).GetLength())
@@ -963,7 +968,7 @@ public:
           return;
         }
       }
-    }, "+ ADD PEDAL", buttonStyle));
+    }, mAddPedalSVG))->SetTooltip("Add pedal");
 
     SelectSlot(0);
   }
@@ -984,7 +989,8 @@ private:
   }
 
   IBitmap mBackground, mFileBackground, mKnobBackground, mSwitchBitmap;
-  ISVG mCloseSVG, mFileSVG, mLeftSVG, mRightSVG, mGlobeSVG, mEffectOffSVG, mEffectOnSVG;
+  ISVG mCloseSVG, mFileSVG, mLeftSVG, mRightSVG, mGlobeSVG;
+  ISVG mAddPedalSVG, mMoveLeftSVG, mMoveRightSVG, mRemovePedalSVG, mEffectOffSVG, mEffectOnSVG;
   IVStyle mStyle;
   int mSelectedSlot = 0;
   std::array<NAMEffectSlotButtonControl*, kMaxFXSlots> mSlotButtons{};

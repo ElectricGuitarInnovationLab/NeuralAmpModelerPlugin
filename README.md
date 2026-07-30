@@ -38,7 +38,7 @@ The original GitHub Actions workflows in the Neural Amp Modeler project also ser
 
 ### Building Puke Amp VST3
 
-The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/NAM`, `Models/FX`, and `Models/IR`. The Windows artifact also contains `Puke Amp-VST3-Windows-Setup.exe`.
+The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/NAM`, `Models/FX`, and `Models/IR`. The Windows artifact also contains a versioned `Puke-Amp-<version>-Windows-Setup-Unsigned.exe` installer.
 
 #### Compiling the VST3 locally on macOS
 
@@ -117,7 +117,7 @@ Successful builds produce:
 
 ```text
 NeuralAmpModeler/build-vst3/mac/products/Puke Amp.vst3
-NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS.zip
+NeuralAmpModeler/build-vst3/mac/Puke-Amp-0.1.0-macOS.zip
 ```
 
 The `.vst3` path is a plugin bundle, even though Finder displays it like a
@@ -131,64 +131,81 @@ ditto "NeuralAmpModeler/build-vst3/mac/products/Puke Amp.vst3" \
 
 Restart the DAW or rescan its plugins after installation.
 
-##### Publishing a signed and notarized macOS release
+#### Testing macOS release signing
 
-For a distributable release, the VST3 and its DMG must be signed with a
-Developer ID Application certificate rather than the development ad-hoc signature.
+The release workflow can exercise the complete macOS signing path without
+creating a tag or GitHub release. The required Apple certificates,
+notarization key, and GitHub Actions secrets are documented in
+[`NeuralAmpModeler/installer/README.md`](NeuralAmpModeler/installer/README.md).
 
-Additional requirements:
+After the workflow and secrets are present on the default branch:
 
-- A Developer ID Application certificate installed in the login keychain.
-- The `puke-amp-notary` notarytool profile stored in the macOS keychain.
-- `appdmg`, used to create the drag-install disk image.
+1. Open **Actions → Release Puke Amp → Run workflow** on GitHub.
+2. Leave **Also build the Windows installer** unchecked.
+3. Run the workflow and wait for **Build signed macOS installer** to finish.
+4. Download the `release-macos` workflow artifact.
 
-Install `appdmg` once if it is not already available:
+The test builds and Developer ID-signs the VST3, creates and signs the installer
+package, submits it to Apple with `notarytool`, staples the ticket, and validates
+the result. It does not create a GitHub release.
 
-```sh
-npm install --global appdmg
-```
-
-The checked-in `CodesigningScripts/signing.env` selects the existing notary
-profile without storing the Apple ID, password, or App Store Connect key:
-
-```sh
-NOTARY_PROFILE=puke-amp-notary
-```
-
-The default signing identity is `Developer ID Application: Clear Blue Media LLC
-(HSAYDGFEVC)`. Override it for a different certificate when invoking the command:
+Verify the downloaded package on a Mac if desired:
 
 ```sh
-IDENTITY="Developer ID Application: Company Name (TEAMID)" \
-  ./CodesigningScripts/build-and-sign.sh
+pkgutil --check-signature "Puke-Amp-0.1.0-macOS.pkg"
+spctl --assess --type install --verbose=4 "Puke-Amp-0.1.0-macOS.pkg"
+xcrun stapler validate "Puke-Amp-0.1.0-macOS.pkg"
 ```
 
-To build, sign, notarize, staple, and package everything with the default identity:
+#### Publishing a release
 
-```sh
-./CodesigningScripts/build-and-sign.sh
-```
+Releases are initiated by version tags. For example, to publish version `0.2.0`:
 
-- Stages a real bundle under `build-vst3/mac/release` instead of Xcode's symlink.
-The command:
+1. Update the product version in `NeuralAmpModeler/config.h`:
 
-- Builds the release VST3.
-- Replaces its ad-hoc signature with a timestamped hardened-runtime signature.
-- Submits the signed VST3 to Apple using `puke-amp-notary`.
-- Staples and validates the VST3 notarization ticket.
-- Creates a DMG with the plugin and a link to `/Library/Audio/Plug-Ins/VST3`.
-- Signs, notarizes, staples, and validates the final DMG.
+   ```c
+   #define PLUG_VERSION_HEX 0x00000200
+   #define PLUG_VERSION_STR "0.2.0"
+   ```
 
-Successful releases produce:
+   Do not change `STATE_VERSION_STR` unless the serialized plugin-state format
+   changes.
+
+2. Update the changelog or other release notes, then commit and push:
+
+   ```sh
+   git add NeuralAmpModeler/config.h NeuralAmpModeler/installer/changelog.txt
+   git commit -m "Prepare release 0.2.0"
+   git push
+   ```
+
+3. Create and push an annotated tag matching `PLUG_VERSION_STR` exactly:
+
+   ```sh
+   git tag -a v0.2.0 -m "Puke Amp 0.2.0"
+   git push origin v0.2.0
+   ```
+
+The **Release Puke Amp** workflow then validates the tag, builds both platforms,
+signs and notarizes macOS, generates `SHA256SUMS.txt`, and creates a draft GitHub
+release. Without optional Windows signing credentials, the Windows installer is
+clearly labeled `-Unsigned` and the draft contains an unknown-publisher warning.
+
+Expected draft assets are:
 
 ```text
-NeuralAmpModeler/build-vst3/mac/release/Puke Amp.vst3
-NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS-0.7.16.zip
-NeuralAmpModeler/build-vst3/mac/Puke Amp-VST3-macOS-0.7.16.dmg
+Puke-Amp-0.2.0-macOS.pkg
+Puke-Amp-0.2.0-Windows-Setup-Unsigned.exe
+SHA256SUMS.txt
 ```
 
-The plugin ZIP and DMG use separate notarization submissions so both artifacts
-can carry their own stapled ticket. See Apple's [custom notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
+Download and test the draft assets, then select **Publish release** on GitHub.
+Publishing makes the release visible to GitHub clients and the planned in-app
+update checker. The workflow never publishes a release automatically.
+
+See Apple's [custom notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)
+for background on signing, notarization, and stapling.
+
 To update and rebuild later:
 
 ```sh
@@ -224,8 +241,8 @@ The 64-bit build, distributable ZIP, and Windows installer are written to:
 
 ```text
 NeuralAmpModeler\build-vst3\windows\Puke Amp.vst3
-NeuralAmpModeler\build-vst3\windows\Puke Amp-VST3-Windows.zip
-NeuralAmpModeler\build-vst3\windows\Puke Amp-VST3-Windows-Setup.exe
+NeuralAmpModeler\build-vst3\windows\Puke-Amp-0.1.0-Windows-Unsigned.zip
+NeuralAmpModeler\build-vst3\windows\Puke-Amp-0.1.0-Windows-Setup-Unsigned.exe
 ```
 
 Run the installer as an administrator to install the complete VST3 bundle in
@@ -234,8 +251,9 @@ location for a 64-bit Windows VST3. The installer also adds a normal Windows
 uninstall entry. Restart the DAW or rescan its plugins after installation.
 
 The generated installer is not digitally signed. Windows may display an
-Unknown Publisher or SmartScreen warning until the release workflow is
-configured with a Windows code-signing certificate.
+Unknown Publisher or SmartScreen warning. If optional Windows signing secrets
+are configured later, the build scripts sign the VST3 and installer and omit
+the `-Unsigned` filename suffix.
 
 
 ## Trademark Notice

@@ -143,6 +143,10 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     const auto ampIconSVG = pGraphics->LoadSVG(AMP_ICON_FN);
     const auto speakerIconSVG = pGraphics->LoadSVG(SPEAKER_ICON_FN);
     const auto pedalSVG = pGraphics->LoadSVG(PEDAL_ICON_FN);
+    const auto addPedalSVG = pGraphics->LoadSVG(ADD_PEDAL_ICON_FN);
+    const auto moveLeftSVG = pGraphics->LoadSVG(MOVE_LEFT_ICON_FN);
+    const auto moveRightSVG = pGraphics->LoadSVG(MOVE_RIGHT_ICON_FN);
+    const auto removePedalSVG = pGraphics->LoadSVG(REMOVE_PEDAL_ICON_FN);
     const auto effectOffSVG = pGraphics->LoadSVG(EFFECT_OFF_ICON_FN);
     const auto effectOnSVG = pGraphics->LoadSVG(EFFECT_ON_ICON_FN);
     const auto slimIconSVG = pGraphics->LoadSVG(SLIMMABLE_ICON_FN);
@@ -189,9 +193,9 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
       contentArea.GetFromBottom((2.0f * fileHeight)).GetFromTop(fileHeight).GetMidHPadded(fileWidth).GetVShifted(-1);
     const auto slimIconArea =
       IRECT(modelArea.R + 6.f, modelArea.MH() - 14.f, modelArea.R + 6.f + 2.f * 28.f, modelArea.MH() + 14.f);
-    const auto modelIconArea = modelArea.GetFromLeft(30).GetTranslated(-40, 10);
+    const auto modelIconArea = modelArea.GetFromLeft(30).GetTranslated(-40, 6);
     const auto irArea = modelArea.GetVShifted(irYOffset);
-    const auto irIconArea = irArea.GetFromLeft(30.0f).GetTranslated(-40.0f, 10.0f);
+    const auto irIconArea = irArea.GetFromLeft(30.0f).GetTranslated(-40.0f, 6.0f);
 
     // Areas for meters
     const auto inputMeterArea = contentArea.GetFromLeft(30).GetHShifted(-20).GetMidVPadded(100).GetVShifted(-25);
@@ -240,7 +244,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     const auto logoArea = titleArea.GetFromLeft(44.0f).GetCentredInside(44.0f, 44.0f);
     pGraphics->AttachControl(new ISVGControl(logoArea, logoSVG));
     pGraphics->AttachControl(new IVLabelControl(titleArea, "Puke Amp", titleStyle));
-    pGraphics->AttachControl(new ISVGControl(modelIconArea, ampIconSVG));
+    pGraphics->AttachControl(new ISVGControl(modelIconArea, ampIconSVG))->SetTooltip("Amp model");
     pGraphics->AttachControl(new NAMSquareButtonControl(
       fxButtonArea, [pGraphics](IControl*) {
         auto* page = pGraphics->GetControlWithTag(kCtrlTagFXPage)->As<NAMFXPageControl>();
@@ -286,7 +290,8 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
       ->SetAnimationEndActionFunction(showSlimOverlay)
       ->Hide(true);
 
-    pGraphics->AttachControl(new ISVGSwitchControl(irIconArea, {speakerIconSVG, speakerIconSVG}, kIRToggle));
+    pGraphics->AttachControl(new ISVGSwitchControl(irIconArea, {speakerIconSVG, speakerIconSVG}, kIRToggle))
+      ->SetTooltip("Cabinet IR on/off");
     pGraphics->AttachControl(
       new NAMFileBrowserControl(irArea, kMsgTagClearIR, defaultIRString.c_str(), "wav", loadIRCompletionHandler, style,
                                 fileSVG, crossSVG, leftArrowSVG, rightArrowSVG, fileBackgroundBitmap, globeSVG,
@@ -313,7 +318,8 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
 
     pGraphics->AttachControl(
       new NAMFXPageControl(b, backgroundBitmap, fileBackgroundBitmap, knobBackgroundBitmap, switchHandleBitmap,
-                           crossSVG, fileSVG, leftArrowSVG, rightArrowSVG, globeSVG, effectOffSVG, effectOnSVG, style),
+                           crossSVG, fileSVG, leftArrowSVG, rightArrowSVG, globeSVG, addPedalSVG, moveLeftSVG,
+                           moveRightSVG, removePedalSVG, effectOffSVG, effectOnSVG, style),
       kCtrlTagFXPage)->Hide(true);
 
     // Settings/help/about box
