@@ -854,6 +854,8 @@ public:
   {
     Hide(hide);
     ForAllChildrenFunc([hide](int, IControl* child) { child->Hide(hide); });
+    if (!hide)
+      RefreshFromPlugin();
     if (GetUI())
     {
       GetUI()->SetAllControlsDirty();
