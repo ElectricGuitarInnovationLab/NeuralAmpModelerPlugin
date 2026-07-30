@@ -1,7 +1,8 @@
 #define PLUG_NAME "Puke Amp"
 #define PLUG_MFR "Puke"
-#define PLUG_VERSION_HEX 0x00000710
-#define PLUG_VERSION_STR "0.7.16"
+#define PLUG_VERSION_HEX 0x00000100
+#define PLUG_VERSION_STR "0.1.0"
+#define STATE_VERSION_STR "0.7.16"
 #define PLUG_UNIQUE_ID 'PkAm'
 #define PLUG_MFR_ID 'SDAa'
 #define PLUG_URL_STR "https://github.com/ElectricGuitarInnovationLab/NeuralAmpModelerPlugin"

@@ -537,8 +537,8 @@ bool NeuralAmpModeler::SerializeState(IByteChunk& chunk) const
   // If this isn't here when unserializing, then we know we're dealing with something before v0.8.0.
   WDL_String header("###NeuralAmpModeler###"); // Don't change this!
   chunk.PutStr(header.Get());
-  // Plugin version, so we can load legacy serialized states in the future!
-  WDL_String version(PLUG_VERSION_STR);
+  // State format version, so product versioning can evolve independently.
+  WDL_String version(STATE_VERSION_STR);
   chunk.PutStr(version.Get());
   // Model directory (don't serialize the model itself; we'll just load it again
   // when we unserialize)
