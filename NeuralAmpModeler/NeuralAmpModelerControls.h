@@ -904,11 +904,11 @@ public:
     const auto titleStyle = DEFAULT_STYLE.WithValueText(IText(25, COLOR_WHITE, "Michroma-Regular"))
                               .WithDrawFrame(false);
     AddChildControl(new IBitmapControl(bounds, mBackground))->SetIgnoreMouse(true);
-    AddChildControl(new IVLabelControl(content.GetFromTop(42.f), "PEDAL FX CHAIN", titleStyle));
+    AddChildControl(new IVLabelControl(content.GetFromTop(42.f), "DRIVE PEDAL FX CHAIN", titleStyle));
     auto* closeButton = AddChildControl(new NAMSquareButtonControl(
       CornerButtonArea(bounds).GetScaledAboutCentre(1.4f).GetHShifted(-40.f),
       [this](IControl*) { HidePage(true); }, mCloseSVG));
-    closeButton->SetTooltip("Close pedal FX chain");
+    closeButton->SetTooltip("Close Drive Pedal FX chain");
 
     auto slotArea = content.GetFromTop(34.f).GetVShifted(48.f);
     for (int slot = 0; slot < kMaxFXSlots; ++slot)
@@ -1008,7 +1008,7 @@ class NAMSettingsPageControl : public IContainerBaseWithNamedChildren
 {
 public:
   NAMSettingsPageControl(const IRECT& bounds, const IBitmap& bitmap, const IBitmap& inputLevelBackgroundBitmap,
-                         const IBitmap& switchBitmap, ISVG closeSVG, ISVG saveSVG, ISVG openSVG,
+                         const IBitmap& switchBitmap, ISVG closeSVG, ISVG saveSVG, ISVG openSVG, ISVG ratLogoSVG,
                          const IVStyle& style, const IVStyle& radioButtonStyle)
   : IContainerBaseWithNamedChildren(bounds)
   , mAnimationTime(0)
@@ -1020,6 +1020,7 @@ public:
   , mCloseSVG(closeSVG)
   , mSaveSVG(saveSVG)
   , mOpenSVG(openSVG)
+  , mRatLogoSVG(ratLogoSVG)
   {
     mIgnoreMouse = false;
   }
@@ -1169,8 +1170,20 @@ public:
     const float halfWidth = PLUG_WIDTH / 2.0f - pad;
     const auto bottomArea = GetRECT().GetPadded(-pad).GetFromBottom(78.0f);
     const float lineHeight = 15.0f;
-    const auto modelInfoArea = bottomArea.GetFromLeft(halfWidth).GetFromTop(4 * lineHeight);
+    const auto ratLogoArea = bottomArea.GetFromLeft(90.0f).GetFromBottom(60.0f);
+    const auto modelInfoArea =
+      bottomArea.GetFromLeft(halfWidth).GetReducedFromLeft(100.0f).GetFromTop(4 * lineHeight);
     const auto aboutArea = bottomArea.GetFromRight(halfWidth).GetFromTop(5 * lineHeight);
+    auto* ratLogo = AddNamedChildControl(
+      new ISVGButtonControl(
+        ratLogoArea,
+        [](IControl* pCaller) {
+          WDL_String url("https://theratlab.org");
+          pCaller->GetUI()->OpenURL(url.Get());
+        },
+        mRatLogoSVG, mRatLogoSVG),
+      mControlNames.ratLogo);
+    ratLogo->SetTooltip("Visit the RATLab website");
     AddNamedChildControl(new ModelInfoControl(modelInfoArea, leftStyle), mControlNames.modelInfo);
     AddNamedChildControl(new AboutControl(aboutArea, leftStyle, leftText), mControlNames.about);
 
@@ -1196,7 +1209,7 @@ private:
   IBitmap mSwitchBitmap;
   IVStyle mStyle;
   IVStyle mRadioButtonStyle;
-  ISVG mCloseSVG, mSaveSVG, mOpenSVG;
+  ISVG mCloseSVG, mSaveSVG, mOpenSVG, mRatLogoSVG;
   int mAnimationTime = 200;
   bool mWillHide = false;
 
@@ -1212,6 +1225,7 @@ private:
     const std::string loadPreset = "LoadPreset";
     const std::string modelInfo = "ModelInfo";
     const std::string outputMode = "OutputMode";
+    const std::string ratLogo = "RatLogo";
     const std::string savePreset = "SavePreset";
     const std::string title = "Title";
   } mControlNames;

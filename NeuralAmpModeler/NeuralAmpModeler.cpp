@@ -151,6 +151,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     const auto effectOnSVG = pGraphics->LoadSVG(EFFECT_ON_ICON_FN);
     const auto slimIconSVG = pGraphics->LoadSVG(SLIMMABLE_ICON_FN);
     const auto logoSVG = pGraphics->LoadSVG(MY_LOGO_FN);
+    const auto ratLogoSVG = pGraphics->LoadSVG(RAT_LOGO_FN);
 
     const auto backgroundBitmap = pGraphics->LoadBitmap(BACKGROUND_FN);
     const auto fileBackgroundBitmap = pGraphics->LoadBitmap(FILEBACKGROUND_FN);
@@ -255,7 +256,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
         auto* page = pGraphics->GetControlWithTag(kCtrlTagFXPage)->As<NAMFXPageControl>();
         page->RefreshFromPlugin();
         page->HidePage(false);
-      }, pedalSVG), kCtrlTagFXButton)->SetTooltip("Open pedal FX chain");
+      }, pedalSVG), kCtrlTagFXButton)->SetTooltip("Open Drive Pedals FX chain");
 
 #ifdef NAM_PICK_DIRECTORY
     const std::string defaultNamFileString = "Select model directory...";
@@ -337,7 +338,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
 
     pGraphics
       ->AttachControl(new NAMSettingsPageControl(b, backgroundBitmap, inputLevelBackgroundBitmap, switchHandleBitmap,
-                                                 crossSVG, savePresetSVG, openPresetSVG, style, radioButtonStyle),
+                                                 crossSVG, savePresetSVG, openPresetSVG, ratLogoSVG, style, radioButtonStyle),
                       kCtrlTagSettingsBox)
       ->Hide(true);
 
