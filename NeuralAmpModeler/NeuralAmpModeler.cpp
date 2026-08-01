@@ -269,7 +269,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     pGraphics->AttachControl(
       new NAMFileBrowserControl(modelArea, kMsgTagClearModel, defaultNamFileString.c_str(), "nam",
                                 loadModelCompletionHandler, style, fileSVG, crossSVG, leftArrowSVG, rightArrowSVG,
-                                fileBackgroundBitmap, globeSVG, "Get NAM Models", getUrl, "NAM"),
+                                fileBackgroundBitmap, globeSVG, "Get NAM Models", getUrl, "Amp"),
       kCtrlTagModelFileBrowser);
 
     auto hideSlimOverlay = [](IControl* pCaller) {

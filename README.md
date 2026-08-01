@@ -5,7 +5,7 @@
 This repository contains:
 
 - The Puke Amp plugin source and build configuration based on **iPlug2**.
-- A collection of `.nam` amplifier models (in `Models/NAM`)
+- A collection of `.nam` amplifier models (in `Models/Amp`)
 - A collection of `.nam` pedal models (in `Models/FX`)
 - A collection of `.wav` impulse responses (IRs) (in `Models/IR`)
 - Supporting assets and documentation developed as part of the **Puke Studio** project.
@@ -38,7 +38,7 @@ The original GitHub Actions workflows in the Neural Amp Modeler project also ser
 
 ### Building Puke Amp VST3
 
-The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/NAM`, `Models/FX`, and `Models/IR`. The Windows artifact also contains a versioned `Puke-Amp-<version>-Windows-Setup-Unsigned.exe` installer.
+The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/Amp`, `Models/FX`, and `Models/IR`. The Windows artifact also contains a versioned `Puke-Amp-<version>-Windows-Setup-Unsigned.exe` installer.
 
 #### Compiling the VST3 locally on macOS
 
