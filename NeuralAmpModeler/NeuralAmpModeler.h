@@ -15,6 +15,8 @@
 #include "ISender.h"
 
 #include <array>
+#include <memory>
+#include <mutex>
 
 
 const int kNumPresets = 1;
@@ -270,6 +272,15 @@ public:
   const char* GetCurrentPresetFile() const { return mCurrentDiskPresetPath.Get(); }
 
 private:
+  struct UpdateCheckState
+  {
+    std::mutex mutex;
+    std::atomic<bool> resultReady = false;
+    std::atomic<bool> notificationClaimed = false;
+    std::string version;
+    std::string url;
+  };
+
   // Allocates mInputPointers and mOutputPointers
   void _AllocateIOPointers(const size_t nChans);
   // Moves DSP modules from staging area to the main area.
@@ -318,6 +329,8 @@ private:
   WDL_String _EncodePresetAssetPath(const WDL_String& path) const;
   WDL_String _ResolvePresetAssetPath(const std::string& path) const;
   void _RecordPresetLoadError(const std::string& error);
+  void _StartUpdateCheck();
+  void _PresentAvailableUpdate();
 
   // See: Unserialization.cpp
   void _UnserializeApplyConfig(nlohmann::json& config);
@@ -383,6 +396,9 @@ private:
   WDL_String mCurrentDiskPresetPath;
   bool mSerializePortablePresetPaths = false;
   bool mLoadingDiskPreset = false;
+
+  std::atomic<bool> mUpdateCheckStarted = false;
+  std::shared_ptr<UpdateCheckState> mUpdateCheckState;
 
   // Tone stack modules
   std::unique_ptr<dsp::tone_stack::AbstractToneStack> mToneStack;

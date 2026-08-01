@@ -244,8 +244,7 @@ jobs:
         run: |
           release_notice=""
           if compgen -G "release-assets/*-Unsigned.exe" > /dev/null; then
-            release_notice="> [!WARNING]
-          > The Windows installer is unsigned. Windows will identify its publisher as Unknown and may display a SmartScreen warning. The macOS package is signed and notarized."
+            release_notice="The Windows installer is unsigned. Windows will identify its publisher as Unknown and may display a SmartScreen warning. The macOS package is signed and notarized."
           fi
 
           gh release create "${GITHUB_REF_NAME}" \

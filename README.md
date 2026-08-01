@@ -199,15 +199,15 @@ Releases are initiated by version tags. For example, to publish version `0.2.1`:
 
    ```sh
    git add NeuralAmpModeler/config.h NeuralAmpModeler/installer/changelog.txt
-   git commit -m "Prepare release 0.2.4"
+   git commit -m "Prepare release 0.2.5"
    git push
    ```
 
 3. Create and push an annotated tag matching `PLUG_VERSION_STR` exactly:
 
    ```sh
-   git tag -a v0.2.4 -m "Puke Amp 0.2.4"
-   git push origin v0.2.4
+   git tag -a v0.2.5 -m "Puke Amp 0.2.5"
+   git push origin v0.2.5
    ```
 
 The **Release Puke Amp** workflow then validates the tag, builds both platforms,
@@ -224,8 +224,9 @@ SHA256SUMS.txt
 ```
 
 Download and test the draft assets, then select **Publish release** on GitHub.
-Publishing makes the release visible to GitHub clients and the planned in-app
-update checker. The workflow never publishes a release automatically.
+Publishing makes the release visible to GitHub clients and the in-app update
+checker. Drafts and prereleases do not trigger a plug-in notification. The
+workflow never publishes a release automatically.
 
 See Apple's [custom notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)
 for background on signing, notarization, and stapling.

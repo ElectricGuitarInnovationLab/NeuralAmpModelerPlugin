@@ -2,6 +2,8 @@
 #include <cmath> // pow
 #include <filesystem>
 #include <iostream>
+#include <mutex>
+#include <thread>
 #include <utility>
 
 #include "Colors.h"
@@ -16,6 +18,7 @@
 #include "architecture.hpp"
 
 #include "NeuralAmpModelerControls.h"
+#include "UpdateChecker.h"
 
 using namespace iplug;
 using namespace igraphics;
@@ -513,6 +516,10 @@ void NeuralAmpModeler::OnIdle()
   mInputSender.TransmitData(*this);
   mOutputSender.TransmitData(*this);
 
+  if (mUpdateCheckState && mUpdateCheckState->resultReady && GetUI() &&
+      !mUpdateCheckState->notificationClaimed.exchange(true))
+    _PresentAvailableUpdate();
+
   if (mNewModelLoadedInDSP)
   {
     if (auto* pGraphics = GetUI())
@@ -687,6 +694,7 @@ int NeuralAmpModeler::UnserializeState(const IByteChunk& chunk, int startPos)
 void NeuralAmpModeler::OnUIOpen()
 {
   Plugin::OnUIOpen();
+  _StartUpdateCheck();
 
   if (mNAMPath.GetLength())
   {
@@ -709,6 +717,58 @@ void NeuralAmpModeler::OnUIOpen()
     _UpdateControlsFromModel();
   }
   _RefreshFXPage();
+}
+
+void NeuralAmpModeler::_StartUpdateCheck()
+{
+  if (mUpdateCheckStarted.exchange(true))
+    return;
+
+  static auto sharedState = std::make_shared<UpdateCheckState>();
+  static std::once_flag startOnce;
+  mUpdateCheckState = sharedState;
+
+  std::call_once(startOnce, [state = mUpdateCheckState]() {
+    std::thread([state]() {
+      update_checker::Release release;
+      if (!update_checker::FetchLatestRelease(release) ||
+          !update_checker::IsNewerVersion(release.version, PLUG_VERSION_STR))
+        return;
+
+      {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        state->version = std::move(release.version);
+        state->url = std::move(release.url);
+      }
+      state->resultReady = true;
+    }).detach();
+  });
+}
+
+void NeuralAmpModeler::_PresentAvailableUpdate()
+{
+  auto* graphics = GetUI();
+  if (!graphics)
+    return;
+
+  std::string version;
+  std::string url;
+  {
+    std::lock_guard<std::mutex> lock(mUpdateCheckState->mutex);
+    version = mUpdateCheckState->version;
+    url = mUpdateCheckState->url;
+  }
+
+  const std::string message = "Puke Amp " + version + " is available.\n\nOpen the GitHub release page?";
+  auto completion = [graphics, url](EMsgBoxResult result) {
+    if (result == kYES)
+      graphics->OpenURL(url.c_str());
+  };
+#ifdef OS_MAC
+  graphics->ShowMessageBox("Puke Amp Update", message.c_str(), kMB_YESNO, completion);
+#else
+  graphics->ShowMessageBox(message.c_str(), "Puke Amp Update", kMB_YESNO, completion);
+#endif
 }
 
 void NeuralAmpModeler::OnParamChange(int paramIdx)
