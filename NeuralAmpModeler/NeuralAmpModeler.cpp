@@ -50,8 +50,6 @@ const IVStyle style =
           DEFAULT_SHADOW_OFFSET,
           DEFAULT_WIDGET_FRAC,
           DEFAULT_WIDGET_ANGLE};
-const IVStyle titleStyle =
-  DEFAULT_STYLE.WithValueText(IText(30, COLOR_WHITE, "Michroma-Regular")).WithDrawFrame(false).WithShadowOffset(2.f);
 const IVStyle radioButtonStyle =
   style
     .WithColor(EVColor::kON, PluginColors::NAM_THEMECOLOR) // Pressed buttons and their labels
@@ -205,6 +203,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
     // Misc Areas
     const auto settingsButtonArea = CornerButtonArea(b);
     const auto fxButtonArea = titleArea.GetFromRight(80.f).GetFromLeft(40.f).GetCentredInside(28.f, 28.f);
+    const auto presetBrowserArea = titleArea.GetCentredInside(300.f, 34.f);
 
     // Model loader button
     auto loadModelCompletionHandler = [&](const WDL_String& fileName, const WDL_String& path) {
@@ -249,7 +248,9 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
         pCaller->GetUI()->OpenURL(url.Get());
       }, logoSVG, logoSVG))
       ->SetTooltip("Visit puke.studio");
-    pGraphics->AttachControl(new IVLabelControl(titleArea, "Puke Amp", titleStyle));
+    pGraphics->AttachControl(
+      new NAMPresetBrowserControl(presetBrowserArea, style, fileBackgroundBitmap, savePresetSVG, openPresetSVG),
+      kCtrlTagPresetBrowser);
     pGraphics->AttachControl(new ISVGControl(modelIconArea, ampIconSVG))->SetTooltip("Amp model");
     pGraphics->AttachControl(new NAMSquareButtonControl(
       fxButtonArea, [pGraphics](IControl*) {
@@ -338,7 +339,7 @@ NeuralAmpModeler::NeuralAmpModeler(const InstanceInfo& info)
 
     pGraphics
       ->AttachControl(new NAMSettingsPageControl(b, backgroundBitmap, inputLevelBackgroundBitmap, switchHandleBitmap,
-                                                 crossSVG, savePresetSVG, openPresetSVG, ratLogoSVG, style, radioButtonStyle),
+                                                 crossSVG, ratLogoSVG, style, radioButtonStyle),
                       kCtrlTagSettingsBox)
       ->Hide(true);
 
@@ -554,11 +555,115 @@ bool NeuralAmpModeler::SerializeState(IByteChunk& chunk) const
   chunk.PutStr(version.Get());
   // Model directory (don't serialize the model itself; we'll just load it again
   // when we unserialize)
-  chunk.PutStr(mNAMPath.Get());
-  chunk.PutStr(mIRPath.Get());
+  const auto namPath = _EncodePresetAssetPath(mNAMPath);
+  const auto irPath = _EncodePresetAssetPath(mIRPath);
+  chunk.PutStr(namPath.Get());
+  chunk.PutStr(irPath.Get());
   for (const auto& slot : mFXSlots)
-    chunk.PutStr(slot->path.Get());
+  {
+    const auto fxPath = _EncodePresetAssetPath(slot->path);
+    chunk.PutStr(fxPath.Get());
+  }
   return SerializeParams(chunk);
+}
+
+bool NeuralAmpModeler::SavePresetFile(const char* filePath, const char* bundledModelsRoot)
+{
+  mLastPresetError.Set("");
+  mPresetModelsRoot.Set(bundledModelsRoot ? bundledModelsRoot : "");
+  mSerializePortablePresetPaths = true;
+  const bool saved = SavePresetAsFXP(filePath);
+  mSerializePortablePresetPaths = false;
+  mPresetModelsRoot.Set("");
+  if (!saved)
+    mLastPresetError.Set("The preset file could not be saved.");
+  else
+    mCurrentDiskPresetPath.Set(filePath);
+  return saved;
+}
+
+bool NeuralAmpModeler::LoadPresetFile(const char* filePath, const char* bundledModelsRoot)
+{
+  mLastPresetError.Set("");
+  mPresetModelsRoot.Set(bundledModelsRoot ? bundledModelsRoot : "");
+  mLoadingDiskPreset = true;
+  const bool loaded = LoadPresetFromFXP(filePath);
+  mLoadingDiskPreset = false;
+  mPresetModelsRoot.Set("");
+
+  if (!loaded)
+    mLastPresetError.Set("The selected file is not a valid Puke Amp preset.");
+  const bool success = loaded && !CStringHasContents(mLastPresetError.Get());
+  if (success)
+    mCurrentDiskPresetPath.Set(filePath);
+  return success;
+}
+
+WDL_String NeuralAmpModeler::_EncodePresetAssetPath(const WDL_String& path) const
+{
+  if (!mSerializePortablePresetPaths || !CStringHasContents(path.Get()) || !CStringHasContents(mPresetModelsRoot.Get()))
+    return path;
+
+  try
+  {
+    const auto root = std::filesystem::weakly_canonical(std::filesystem::u8path(mPresetModelsRoot.Get()));
+    const auto asset = std::filesystem::weakly_canonical(std::filesystem::u8path(path.Get()));
+    const auto relative = asset.lexically_relative(root);
+    if (!relative.empty() && *relative.begin() != "..")
+      return WDL_String((std::string("bundle://") + relative.generic_string()).c_str());
+  }
+  catch (const std::filesystem::filesystem_error&)
+  {
+  }
+  return path;
+}
+
+WDL_String NeuralAmpModeler::_ResolvePresetAssetPath(const std::string& storedPath) const
+{
+  if (storedPath.empty())
+    return WDL_String("");
+
+  const std::string portablePrefix = "bundle://";
+  try
+  {
+    if (storedPath.rfind(portablePrefix, 0) == 0 && CStringHasContents(mPresetModelsRoot.Get()))
+    {
+      const auto resolved = std::filesystem::u8path(mPresetModelsRoot.Get()) /
+                            std::filesystem::u8path(storedPath.substr(portablePrefix.size()));
+      return WDL_String(resolved.lexically_normal().string().c_str());
+    }
+
+    const auto original = std::filesystem::u8path(storedPath);
+    if (std::filesystem::exists(original) || !CStringHasContents(mPresetModelsRoot.Get()))
+      return WDL_String(storedPath.c_str());
+
+    // Backward compatibility for factory presets created before portable paths:
+    // preserve the portion beneath Models and resolve it in this installation.
+    std::string normalized = storedPath;
+    std::replace(normalized.begin(), normalized.end(), '\\', '/');
+    const std::string marker = "/Models/";
+    const auto markerPos = normalized.rfind(marker);
+    if (markerPos != std::string::npos)
+    {
+      const auto relative = normalized.substr(markerPos + marker.size());
+      const auto resolved = std::filesystem::u8path(mPresetModelsRoot.Get()) / std::filesystem::u8path(relative);
+      if (std::filesystem::exists(resolved))
+        return WDL_String(resolved.lexically_normal().string().c_str());
+    }
+  }
+  catch (const std::filesystem::filesystem_error&)
+  {
+  }
+  return WDL_String(storedPath.c_str());
+}
+
+void NeuralAmpModeler::_RecordPresetLoadError(const std::string& error)
+{
+  if (!mLoadingDiskPreset || error.empty())
+    return;
+  if (mLastPresetError.GetLength())
+    mLastPresetError.Append("\n");
+  mLastPresetError.Append(error.c_str());
 }
 
 int NeuralAmpModeler::UnserializeState(const IByteChunk& chunk, int startPos)

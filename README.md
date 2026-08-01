@@ -8,6 +8,7 @@ This repository contains:
 - A collection of `.nam` amplifier models (in `Models/Amp`)
 - A collection of `.nam` pedal models (in `Models/FX`)
 - A collection of `.wav` impulse responses (IRs) (in `Models/IR`)
+- Factory `.fxp` presets (in `Models/Presets`)
 - Supporting assets and documentation developed as part of the **Puke Studio** project.
 
 The included amplifier models and impulse responses were created by the RATLab and are intended for research, education, and music production.
@@ -24,6 +25,29 @@ Put pedal capture `.nam` files under `Models/FX` to make them available in the p
 
 The arrow buttons move the selected pedal in the chain, and the global FX CHAIN switch bypasses all pedal slots. Pedal paths, order, bypass states, trims, and EQ settings are included in DAW state and `.fxp` presets.
 
+## Presets
+
+The preset browser in the plug-in header combines three locations:
+
+- Factory presets shipped in `Models/Presets`
+- User presets saved by the plug-in
+- Additional folders selected with **Add Preset Folder...** in the preset menu
+
+The save and open icons sit on either side of the preset name. Saving defaults to
+the user preset folder. Opening or saving a preset elsewhere adds its containing
+folder to the menu, and imported folder locations persist across plug-in instances.
+The menu is rescanned whenever it opens and supports subfolders.
+
+User presets are stored by default in:
+
+- macOS: `~/Library/Application Support/Puke Amp/Presets`
+- Windows: `%LOCALAPPDATA%\Puke Amp\Presets`
+
+Factory presets use portable references for amp, pedal, and IR files beneath the
+bundled `Models` directory. External assets retain their absolute paths. Puke Amp
+also remaps missing bundled paths from older `.fxp` files when their `Models/...`
+suffix matches an asset in the current installation.
+
 ## Building
 
 Puke Amp inherits much of its build system from the original Neural Amp Modeler project.
@@ -38,7 +62,7 @@ The original GitHub Actions workflows in the Neural Amp Modeler project also ser
 
 ### Building Puke Amp VST3
 
-The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/Amp`, `Models/FX`, and `Models/IR`. The Windows artifact also contains a versioned `Puke-Amp-<version>-Windows-Setup-Unsigned.exe` installer.
+The easiest option is **Actions → Build Puke Amp VST3 → Run workflow** on GitHub. When both jobs finish, download the `Puke-Amp-VST3-macOS` or `Puke-Amp-VST3-Windows` artifact. Each artifact contains a ZIP with the complete `Puke Amp.vst3` bundle, including `Models/Amp`, `Models/FX`, `Models/IR`, and `Models/Presets`. The Windows artifact also contains a versioned `Puke-Amp-<version>-Windows-Setup-Unsigned.exe` installer.
 
 #### Compiling the VST3 locally on macOS
 

@@ -54,8 +54,8 @@ void NeuralAmpModeler::_UnserializeApplyConfig(nlohmann::json& config)
   OnParamReset(iplug::EParamSource::kPresetRecall);
   LEAVE_PARAMS_MUTEX
 
-  mNAMPath.Set(static_cast<std::string>(config["NAMPath"]).c_str());
-  mIRPath.Set(static_cast<std::string>(config["IRPath"]).c_str());
+  mNAMPath = _ResolvePresetAssetPath(static_cast<std::string>(config["NAMPath"]));
+  mIRPath = _ResolvePresetAssetPath(static_cast<std::string>(config["IRPath"]));
 
   for (int slot = 0; slot < kMaxFXSlots; ++slot)
   {
@@ -69,17 +69,25 @@ void NeuralAmpModeler::_UnserializeApplyConfig(nlohmann::json& config)
     {
       const std::string path = paths[slot];
       if (!path.empty())
-        _StageFXModel(slot, WDL_String(path.c_str()));
+      {
+        const auto resolvedPath = _ResolvePresetAssetPath(path);
+        const auto error = _StageFXModel(slot, resolvedPath);
+        if (!error.empty())
+          _RecordPresetLoadError("Pedal slot " + std::to_string(slot + 1) + ": " + error);
+      }
     }
   }
 
   if (mNAMPath.GetLength())
   {
-    _StageModel(mNAMPath);
+    const auto error = _StageModel(mNAMPath);
+    if (!error.empty())
+      _RecordPresetLoadError("Amp model: " + error);
   }
   if (mIRPath.GetLength())
   {
-    _StageIR(mIRPath);
+    if (_StageIR(mIRPath) != dsp::wav::LoadReturnCode::SUCCESS)
+      _RecordPresetLoadError("Cabinet IR could not be loaded: " + std::string(mIRPath.Get()));
   }
 }
 
@@ -157,6 +165,13 @@ int _GetConfigFrom_0_7_16(const iplug::IByteChunk& chunk, int startPos, nlohmann
     config[name] = value;
   }
   return pos;
+}
+
+// v0.7.17 uses the same chunk layout as v0.7.16. Disk presets may use
+// bundle:// asset references, which are resolved while applying the config.
+int _GetConfigFrom_0_7_17(const iplug::IByteChunk& chunk, int startPos, nlohmann::json& config)
+{
+  return _GetConfigFrom_0_7_16(chunk, startPos, config);
 }
 
 // v0.7.14
@@ -349,7 +364,11 @@ int NeuralAmpModeler::_UnserializeStateWithKnownVersion(const iplug::IByteChunk&
   _Version version(versionStr);
   // Act accordingly
   nlohmann::json config;
-  if (version >= _Version(0, 7, 16))
+  if (version >= _Version(0, 7, 17))
+  {
+    pos = _GetConfigFrom_0_7_17(chunk, pos, config);
+  }
+  else if (version >= _Version(0, 7, 16))
   {
     pos = _GetConfigFrom_0_7_16(chunk, pos, config);
   }

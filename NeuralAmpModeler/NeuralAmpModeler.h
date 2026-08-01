@@ -94,6 +94,7 @@ enum ECtrlTags
   kCtrlTagFXButton,
   kCtrlTagFXPage,
   kCtrlTagFXFileBrowser,
+  kCtrlTagPresetBrowser,
   kNumCtrlTags
 };
 
@@ -263,6 +264,10 @@ public:
   void MoveFXModel(int from, int to);
   const WDL_String& GetFXModelPath(int slot) const;
   void SetFXEditorSlot(int slot);
+  bool SavePresetFile(const char* filePath, const char* bundledModelsRoot);
+  bool LoadPresetFile(const char* filePath, const char* bundledModelsRoot);
+  const char* GetLastPresetError() const { return mLastPresetError.Get(); }
+  const char* GetCurrentPresetFile() const { return mCurrentDiskPresetPath.Get(); }
 
 private:
   // Allocates mInputPointers and mOutputPointers
@@ -310,6 +315,9 @@ private:
   void _SetOutputGain();
   void _ApplySlimParamToLoadedNAMs();
   void _RefreshFXPage();
+  WDL_String _EncodePresetAssetPath(const WDL_String& path) const;
+  WDL_String _ResolvePresetAssetPath(const std::string& path) const;
+  void _RecordPresetLoadError(const std::string& error);
 
   // See: Unserialization.cpp
   void _UnserializeApplyConfig(nlohmann::json& config);
@@ -367,6 +375,14 @@ private:
   std::atomic<bool> mFXPageNeedsRefresh = false;
   std::atomic<int> mFXEditorSlot = 0;
   std::atomic<int> mPendingFXMove = -1;
+
+  // Set only while explicitly saving or loading a disk preset from the UI.
+  // DAW project state continues to use absolute paths.
+  WDL_String mPresetModelsRoot;
+  WDL_String mLastPresetError;
+  WDL_String mCurrentDiskPresetPath;
+  bool mSerializePortablePresetPaths = false;
+  bool mLoadingDiskPreset = false;
 
   // Tone stack modules
   std::unique_ptr<dsp::tone_stack::AbstractToneStack> mToneStack;

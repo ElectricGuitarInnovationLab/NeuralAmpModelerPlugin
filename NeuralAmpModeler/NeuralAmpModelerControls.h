@@ -3,10 +3,13 @@
 #include <cmath> // std::round
 #include <cstdio> // FILE, fclose
 #include <filesystem> // std::filesystem
+#include <fstream> // std::ifstream, std::ofstream
 #include <sstream> // std::stringstream
 #include <unordered_map> // std::unordered_map
+#include <vector> // std::vector
 #include "IControls.h"
 #include "IPlugPaths.h"
+#include "json.hpp"
 
 #ifdef OS_WIN
   #include <Windows.h>
@@ -630,6 +633,346 @@ private:
   NAMGetButtonControl* mGetButton = nullptr;
 };
 
+class NAMPresetBrowserControl : public IDirBrowseControlBase
+{
+public:
+  NAMPresetBrowserControl(const IRECT& bounds, const IVStyle& style, const IBitmap& bitmap, const ISVG& saveSVG,
+                          const ISVG& openSVG)
+  : IDirBrowseControlBase(bounds, "fxp", false, true)
+  , mStyle(style.WithColor(kFG, COLOR_TRANSPARENT).WithDrawFrame(false))
+  , mBitmap(bitmap)
+  , mSaveSVG(saveSVG)
+  , mOpenSVG(openSVG)
+  {
+    mIgnoreMouse = true;
+  }
+
+  void Draw(IGraphics& g) override { g.DrawFittedBitmap(mBitmap, mRECT); }
+
+  void OnAttached() override
+  {
+    ResolvePaths();
+    LoadImportedDirectories();
+    mCurrentPresetPath = PLUG()->GetCurrentPresetFile();
+    RefreshMenu();
+
+    auto savePreset = [this](IControl* pCaller) {
+      EnsureUserPresetDirectory();
+      WDL_String fileName("Puke Amp Preset.fxp");
+      WDL_String path(mUserPresetDirectory.c_str());
+      auto* ui = pCaller->GetUI();
+      auto* plugin = PLUG();
+      ui->PromptForFile(
+        fileName, path, EFileAction::Save, "fxp",
+        [this, plugin, ui](const WDL_String& selectedFile, const WDL_String&) {
+          if (!selectedFile.GetLength())
+            return;
+          if (!plugin->SavePresetFile(selectedFile.Get(), mBundledModelsRoot.c_str()))
+          {
+            ui->ShowMessageBox(plugin->GetLastPresetError(), "Failed to save preset", kMB_OK);
+            return;
+          }
+          AddParentAsImportedIfNeeded(selectedFile.Get());
+          mCurrentPresetPath = selectedFile.Get();
+          RefreshMenu();
+          UpdateLabel();
+        });
+    };
+
+    auto openPreset = [this](IControl* pCaller) {
+      WDL_String fileName;
+      WDL_String path(mUserPresetDirectory.c_str());
+      auto* ui = pCaller->GetUI();
+      ui->PromptForFile(
+        fileName, path, EFileAction::Open, "fxp",
+        [this, ui](const WDL_String& selectedFile, const WDL_String&) {
+          if (!selectedFile.GetLength())
+            return;
+          if (LoadPreset(selectedFile.Get()))
+          {
+            AddParentAsImportedIfNeeded(selectedFile.Get());
+            RefreshMenu();
+          }
+        });
+    };
+
+    auto choosePreset = [this](IControl* pCaller) {
+      RefreshMenu();
+      CheckSelectedItem();
+      pCaller->GetUI()->CreatePopupMenu(*this, mMainMenu, pCaller->GetRECT());
+    };
+
+    auto padded = mRECT.GetPadded(-4.f).GetHPadded(-2.f);
+    const auto iconSize = 22.f;
+    const auto saveArea = padded.ReduceFromLeft(28.f).GetCentredInside(iconSize, iconSize);
+    const auto openArea = padded.ReduceFromRight(28.f).GetCentredInside(iconSize, iconSize);
+
+    auto* saveButton = AddChildControl(new NAMSquareButtonControl(saveArea, DefaultClickActionFunc, mSaveSVG));
+    saveButton->SetTooltip("Save preset");
+    saveButton->SetAnimationEndActionFunction(savePreset);
+
+    auto* openButton = AddChildControl(new NAMSquareButtonControl(openArea, DefaultClickActionFunc, mOpenSVG));
+    openButton->SetTooltip("Open preset file");
+    openButton->SetAnimationEndActionFunction(openPreset);
+
+    mPresetNameControl = new NAMFileNameControl(padded, "Choose Preset...", mStyle);
+    AddChildControl(mPresetNameControl);
+    mPresetNameControl->SetTooltip("Choose a factory, user, or imported preset");
+    mPresetNameControl->SetAnimationEndActionFunction(choosePreset);
+  }
+
+  void OnPopupMenuSelection(IPopupMenu* pSelectedMenu, int valIdx) override
+  {
+    if (!pSelectedMenu)
+      return;
+    auto* item = pSelectedMenu->GetChosenItem();
+    if (!item)
+      return;
+
+    const int fileIndex = mItems.Find(item);
+    if (fileIndex >= 0)
+    {
+      mSelectedItemIndex = fileIndex;
+      WDL_String fileName;
+      GetSelectedFile(fileName);
+      LoadPreset(fileName.Get());
+      return;
+    }
+
+    if (item == mAddFolderItem)
+      PromptToAddFolder();
+    else if (item == mRevealUserFolderItem)
+    {
+      WDL_String path(mUserPresetDirectory.c_str());
+      GetUI()->RevealPathInExplorerOrFinder(path);
+    }
+    else if (item == mRefreshItem)
+      RefreshMenu();
+    else
+    {
+      for (const auto& removable : mRemoveFolderItems)
+      {
+        if (item == removable.first)
+        {
+          RemoveImportedDirectory(removable.second);
+          break;
+        }
+      }
+    }
+  }
+
+private:
+  static void AppendPathComponent(WDL_String& path, const char* component)
+  {
+    if (!CStringHasContents(path.Get()) || !CStringHasContents(component))
+      return;
+    if (!WDL_IS_DIRCHAR(path.Get()[path.GetLength() - 1]))
+      path.Append(WDL_DIRCHAR_STR);
+    path.Append(component);
+  }
+
+  static bool IsDirectory(const std::string& path)
+  {
+    std::error_code error;
+    return !path.empty() && std::filesystem::is_directory(std::filesystem::u8path(path), error);
+  }
+
+  static bool SamePath(const std::string& lhs, const std::string& rhs)
+  {
+    if (lhs.empty() || rhs.empty())
+      return false;
+    std::error_code error;
+    const auto left = std::filesystem::weakly_canonical(std::filesystem::u8path(lhs), error);
+    if (error)
+      return false;
+    const auto right = std::filesystem::weakly_canonical(std::filesystem::u8path(rhs), error);
+    return !error && left == right;
+  }
+
+  void ResolvePaths()
+  {
+    WDL_String resourcePath;
+    BundleResourcePath(resourcePath,
+#ifdef OS_WIN
+                       static_cast<PluginIDType>(GetUI()->GetWinModuleHandle())
+#elif defined OS_MAC || defined OS_IOS
+                       GetUI()->GetBundleID()
+#else
+                       nullptr
+#endif
+    );
+#ifdef OS_WIN
+    if (!resourcePath.GetLength())
+      PluginPath(resourcePath, static_cast<PluginIDType>(GetUI()->GetWinModuleHandle()));
+#endif
+    AppendPathComponent(resourcePath, "Models");
+    mBundledModelsRoot = resourcePath.Get();
+    const auto factoryPath = std::filesystem::u8path(mBundledModelsRoot) / "Presets";
+    mFactoryPresetDirectory = factoryPath.string();
+
+    WDL_String appSupport;
+    AppSupportPath(appSupport, false);
+    AppendPathComponent(appSupport, PLUG_NAME);
+    mPreferencesDirectory = appSupport.Get();
+    const auto preferencesPath = std::filesystem::u8path(mPreferencesDirectory);
+    mUserPresetDirectory = (preferencesPath / "Presets").string();
+    mImportedDirectoriesFile = (preferencesPath / "preset-folders.json").string();
+    EnsureUserPresetDirectory();
+  }
+
+  void EnsureUserPresetDirectory()
+  {
+    std::error_code error;
+    std::filesystem::create_directories(std::filesystem::u8path(mUserPresetDirectory), error);
+  }
+
+  void LoadImportedDirectories()
+  {
+    mImportedDirectories.clear();
+    std::ifstream input(std::filesystem::u8path(mImportedDirectoriesFile));
+    if (!input)
+      return;
+    try
+    {
+      const auto json = nlohmann::json::parse(input);
+      if (!json.is_array())
+        return;
+      for (const auto& entry : json)
+      {
+        if (entry.is_string())
+          AddImportedDirectory(entry.get<std::string>(), false);
+      }
+    }
+    catch (const nlohmann::json::exception&)
+    {
+    }
+  }
+
+  void SaveImportedDirectories() const
+  {
+    std::error_code error;
+    std::filesystem::create_directories(std::filesystem::u8path(mPreferencesDirectory), error);
+    std::ofstream output(std::filesystem::u8path(mImportedDirectoriesFile), std::ios::trunc);
+    if (output)
+      output << nlohmann::json(mImportedDirectories).dump(2);
+  }
+
+  void AddImportedDirectory(const std::string& directory, bool save = true)
+  {
+    if (!IsDirectory(directory) || SamePath(directory, mFactoryPresetDirectory) ||
+        SamePath(directory, mUserPresetDirectory))
+      return;
+    for (const auto& existing : mImportedDirectories)
+      if (SamePath(existing, directory))
+        return;
+    mImportedDirectories.push_back(directory);
+    if (save)
+      SaveImportedDirectories();
+  }
+
+  void RemoveImportedDirectory(const std::string& directory)
+  {
+    mImportedDirectories.erase(
+      std::remove_if(mImportedDirectories.begin(), mImportedDirectories.end(),
+                     [&](const std::string& entry) { return SamePath(entry, directory); }),
+      mImportedDirectories.end());
+    SaveImportedDirectories();
+    RefreshMenu();
+  }
+
+  void AddParentAsImportedIfNeeded(const char* filePath)
+  {
+    const auto parent = std::filesystem::u8path(filePath).parent_path().string();
+    const auto oldSize = mImportedDirectories.size();
+    AddImportedDirectory(parent);
+    if (mImportedDirectories.size() != oldSize)
+      RefreshMenu();
+  }
+
+  void PromptToAddFolder()
+  {
+    WDL_String directory(mUserPresetDirectory.c_str());
+    GetUI()->PromptForDirectory(directory, [this](const WDL_String&, const WDL_String& selectedDirectory) {
+      if (selectedDirectory.GetLength())
+      {
+        AddImportedDirectory(selectedDirectory.Get());
+        RefreshMenu();
+      }
+    });
+  }
+
+  void RefreshMenu()
+  {
+    ClearPathList();
+    if (IsDirectory(mFactoryPresetDirectory))
+      AddPath(mFactoryPresetDirectory.c_str(), "Factory Presets");
+    if (IsDirectory(mUserPresetDirectory))
+      AddPath(mUserPresetDirectory.c_str(), "User Presets");
+    for (const auto& directory : mImportedDirectories)
+    {
+      if (!IsDirectory(directory))
+        continue;
+      const auto name = std::filesystem::u8path(directory).filename().string();
+      const auto label = std::string("Imported: ") + (name.empty() ? directory : name);
+      AddPath(directory.c_str(), label.c_str());
+    }
+    SetupMenu();
+    if (!mCurrentPresetPath.empty())
+      SetSelectedFile(mCurrentPresetPath.c_str());
+
+    mMainMenu.AddSeparator();
+    mAddFolderItem = mMainMenu.AddItem("Add Preset Folder...");
+    mRevealUserFolderItem = mMainMenu.AddItem("Reveal User Presets Folder");
+    mRefreshItem = mMainMenu.AddItem("Refresh Presets");
+    mRemoveFolderItems.clear();
+    if (!mImportedDirectories.empty())
+    {
+      auto* removeMenu = new IPopupMenu();
+      for (const auto& directory : mImportedDirectories)
+      {
+        auto* item = removeMenu->AddItem(directory.c_str());
+        mRemoveFolderItems.emplace_back(item, directory);
+      }
+      mMainMenu.AddItem("Remove Imported Folder", removeMenu);
+    }
+  }
+
+  bool LoadPreset(const char* filePath)
+  {
+    auto* plugin = PLUG();
+    if (!plugin->LoadPresetFile(filePath, mBundledModelsRoot.c_str()))
+    {
+      GetUI()->ShowMessageBox(plugin->GetLastPresetError(), "Preset loaded with errors", kMB_OK);
+      return false;
+    }
+    mCurrentPresetPath = filePath;
+    UpdateLabel();
+    return true;
+  }
+
+  void UpdateLabel()
+  {
+    if (mPresetNameControl && !mCurrentPresetPath.empty())
+      mPresetNameControl->SetLabelAndTooltipEllipsizing(WDL_String(mCurrentPresetPath.c_str()));
+  }
+
+  IVStyle mStyle;
+  IBitmap mBitmap;
+  ISVG mSaveSVG, mOpenSVG;
+  NAMFileNameControl* mPresetNameControl = nullptr;
+  std::string mBundledModelsRoot;
+  std::string mFactoryPresetDirectory;
+  std::string mUserPresetDirectory;
+  std::string mPreferencesDirectory;
+  std::string mImportedDirectoriesFile;
+  std::string mCurrentPresetPath;
+  std::vector<std::string> mImportedDirectories;
+  IPopupMenu::Item* mAddFolderItem = nullptr;
+  IPopupMenu::Item* mRevealUserFolderItem = nullptr;
+  IPopupMenu::Item* mRefreshItem = nullptr;
+  std::vector<std::pair<IPopupMenu::Item*, std::string>> mRemoveFolderItems;
+};
+
 class NAMMeterControl : public IVPeakAvgMeterControl<>, public IBitmapBase
 {
   static constexpr float KMeterMin = -70.0f;
@@ -1008,7 +1351,7 @@ class NAMSettingsPageControl : public IContainerBaseWithNamedChildren
 {
 public:
   NAMSettingsPageControl(const IRECT& bounds, const IBitmap& bitmap, const IBitmap& inputLevelBackgroundBitmap,
-                         const IBitmap& switchBitmap, ISVG closeSVG, ISVG saveSVG, ISVG openSVG, ISVG ratLogoSVG,
+                         const IBitmap& switchBitmap, ISVG closeSVG, ISVG ratLogoSVG,
                          const IVStyle& style, const IVStyle& radioButtonStyle)
   : IContainerBaseWithNamedChildren(bounds)
   , mAnimationTime(0)
@@ -1018,8 +1361,6 @@ public:
   , mStyle(style)
   , mRadioButtonStyle(radioButtonStyle)
   , mCloseSVG(closeSVG)
-  , mSaveSVG(saveSVG)
-  , mOpenSVG(openSVG)
   , mRatLogoSVG(ratLogoSVG)
   {
     mIgnoreMouse = false;
@@ -1092,45 +1433,6 @@ public:
     AddNamedChildControl(new IBitmapControl(GetRECT(), mBitmap), mControlNames.bitmap)->SetIgnoreMouse(true);
     const auto titleArea = GetRECT().GetPadded(-(pad + 10.0f)).GetFromTop(50.0f);
     AddNamedChildControl(new IVLabelControl(titleArea, "SETTINGS", titleStyle), mControlNames.title);
-    const auto presetButtonsArea = titleArea.GetFromLeft(90.0f);
-    const auto savePresetArea = presetButtonsArea.GetGridCell(0, 0, 1, 2).GetCentredInside(28.0f, 28.0f);
-    const auto loadPresetArea = presetButtonsArea.GetGridCell(0, 1, 1, 2).GetCentredInside(28.0f, 28.0f);
-
-    auto savePreset = [this](IControl* pCaller) {
-      WDL_String fileName("Puke Amp Preset.fxp");
-      WDL_String path;
-      auto* plugin = PLUG();
-      auto* ui = pCaller->GetUI();
-      ui->PromptForFile(
-        fileName, path, EFileAction::Save, "fxp",
-        [plugin, ui](const WDL_String& selectedFile, const WDL_String&) {
-          if (selectedFile.GetLength() && !plugin->SavePresetAsFXP(selectedFile.Get()))
-            ui->ShowMessageBox("The preset file could not be saved.", "Failed to save preset", kMB_OK);
-        });
-    };
-
-    auto loadPreset = [this](IControl* pCaller) {
-      WDL_String fileName;
-      WDL_String path;
-      auto* plugin = PLUG();
-      auto* ui = pCaller->GetUI();
-      ui->PromptForFile(
-        fileName, path, EFileAction::Open, "fxp",
-        [plugin, ui](const WDL_String& selectedFile, const WDL_String&) {
-          if (selectedFile.GetLength() && !plugin->LoadPresetFromFXP(selectedFile.Get()))
-            ui->ShowMessageBox("The selected file is not a valid Puke Amp preset.", "Failed to load preset", kMB_OK);
-        });
-    };
-
-    auto* savePresetButton = AddNamedChildControl(
-      new NAMSquareButtonControl(savePresetArea, DefaultClickActionFunc, mSaveSVG), mControlNames.savePreset);
-    savePresetButton->SetTooltip("Save preset");
-    savePresetButton->SetAnimationEndActionFunction(savePreset);
-    auto* loadPresetButton = AddNamedChildControl(
-      new NAMSquareButtonControl(loadPresetArea, DefaultClickActionFunc, mOpenSVG), mControlNames.loadPreset);
-    loadPresetButton->SetTooltip("Open preset");
-    loadPresetButton->SetAnimationEndActionFunction(loadPreset);
-
 
     // Attach input/output calibration controls
     {
@@ -1209,7 +1511,7 @@ private:
   IBitmap mSwitchBitmap;
   IVStyle mStyle;
   IVStyle mRadioButtonStyle;
-  ISVG mCloseSVG, mSaveSVG, mOpenSVG, mRatLogoSVG;
+  ISVG mCloseSVG, mRatLogoSVG;
   int mAnimationTime = 200;
   bool mWillHide = false;
 
@@ -1222,11 +1524,9 @@ private:
     const std::string calibrateInput = "CalibrateInput";
     const std::string close = "Close";
     const std::string inputCalibrationLevel = "InputCalibrationLevel";
-    const std::string loadPreset = "LoadPreset";
     const std::string modelInfo = "ModelInfo";
     const std::string outputMode = "OutputMode";
     const std::string ratLogo = "RatLogo";
-    const std::string savePreset = "SavePreset";
     const std::string title = "Title";
   } mControlNames;
 
