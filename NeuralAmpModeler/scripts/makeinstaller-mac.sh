@@ -47,6 +47,7 @@ RSRCS="~/Music/${PRODUCT_NAME}/Resources"
 
 OUTPUT_BASE_FILENAME="${PRODUCT_NAME} Installer.pkg"
 THIRD_PARTY_NOTICES="./installer/ThirdPartyNotices.txt"
+LICENSE_TEXT="../LicenseText.rtf"
 
 TARGET_DIR="./build-mac/installer"
 PKG_DIR=${TARGET_DIR}/pkgs
@@ -168,7 +169,7 @@ cat > ${TARGET_DIR}/distribution.xml << XMLEND
 <?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="1">
     <title>${PRODUCT_NAME} ${VERSION}</title>
-    <license file="license.rtf" mime-type="application/rtf"/>
+    <license file="LicenseText.rtf" mime-type="text/rtf"/>
     <readme file="readme-mac.rtf" mime-type="application/rtf"/>
     <welcome file="intro.rtf" mime-type="application/rtf"/>
     <background file="${PRODUCT_NAME}-installer-bg.png" alignment="topleft" scaling="none"/>
@@ -197,7 +198,7 @@ XMLEND
 # --resources .
 
 TEMP_RESOURCES=$(mktemp -d)
-cp ./installer/license.rtf ${TEMP_RESOURCES}
+cp "${LICENSE_TEXT}" "${TEMP_RESOURCES}/LicenseText.rtf"
 productbuild --resources ${TEMP_RESOURCES} --distribution ${TARGET_DIR}/distribution.xml --package-path ${PKG_DIR} "${TARGET_DIR}/$OUTPUT_BASE_FILENAME"
 
 rm ${TARGET_DIR}/distribution.xml

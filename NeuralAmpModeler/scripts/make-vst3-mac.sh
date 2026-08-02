@@ -15,10 +15,12 @@ trap 'report_error "${LINENO}" "${BASH_COMMAND}"' ERR
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd "${script_dir}/.." && pwd)"
+repository_dir="$(cd "${project_dir}/.." && pwd)"
 build_root="${project_dir}/build-vst3/mac"
 products_dir="${build_root}/products"
 plugin_path="${products_dir}/Puke Amp.vst3"
 staging_dir="${build_root}/package-root"
+license_path="${repository_dir}/LicenseText.rtf"
 
 version="$(sed -n 's/^#define PLUG_VERSION_STR "\([^"]*\)"/\1/p' "${project_dir}/config.h")"
 if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -29,8 +31,16 @@ fi
 artifact_base="Puke-Amp-${version}-macOS"
 archive_path="${build_root}/${artifact_base}.zip"
 installer_path="${build_root}/${artifact_base}.pkg"
+component_package_path="${build_root}/${artifact_base}-component.pkg"
+distribution_path="${build_root}/distribution.xml"
+installer_resources_dir="${build_root}/installer-resources"
 package_id="${MACOS_PACKAGE_ID:-org.theRATLAB.PukeAmp.VST3}"
 release_build="${RELEASE_BUILD:-0}"
+
+if [[ ! -f "${license_path}" ]]; then
+  echo "error: installer license was not found at ${license_path}." >&2
+  exit 1
+fi
 
 if ! command -v xcodebuild >/dev/null 2>&1; then
   echo "error: xcodebuild was not found. Install Xcode and its command-line tools." >&2
@@ -85,14 +95,39 @@ ditto -c -k --keepParent "${plugin_path}" "${archive_path}"
 
 if [[ "${release_build}" == "1" ]]; then
   rm -rf "${staging_dir}"
-  mkdir -p "${staging_dir}"
+  rm -rf "${installer_resources_dir}"
+  rm -f "${component_package_path}" "${distribution_path}"
+  mkdir -p "${staging_dir}" "${installer_resources_dir}"
   ditto "${plugin_path}" "${staging_dir}/Puke Amp.vst3"
+  ditto "${license_path}" "${installer_resources_dir}/LicenseText.rtf"
 
   pkgbuild \
     --root "${staging_dir}" \
     --identifier "${package_id}" \
     --version "${version}" \
     --install-location "/Library/Audio/Plug-Ins/VST3" \
+    "${component_package_path}"
+
+  cat > "${distribution_path}" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+  <title>Puke Amp ${version}</title>
+  <license file="LicenseText.rtf" mime-type="text/rtf"/>
+  <options customize="never" require-scripts="false"/>
+  <choices-outline>
+    <line choice="default"/>
+  </choices-outline>
+  <choice id="default" visible="false">
+    <pkg-ref id="${package_id}"/>
+  </choice>
+  <pkg-ref id="${package_id}" version="${version}" onConclusion="none">$(basename "${component_package_path}")</pkg-ref>
+</installer-gui-script>
+EOF
+
+  productbuild \
+    --distribution "${distribution_path}" \
+    --resources "${installer_resources_dir}" \
+    --package-path "${build_root}" \
     --sign "${MACOS_INSTALLER_SIGNING_IDENTITY}" \
     "${installer_path}"
 
@@ -115,7 +150,8 @@ if [[ "${release_build}" == "1" ]]; then
     exit 1
   fi
 
-  rm -rf "${staging_dir}"
+  rm -rf "${staging_dir}" "${installer_resources_dir}"
+  rm -f "${component_package_path}" "${distribution_path}"
   echo "Packaged ${installer_path}"
 fi
 

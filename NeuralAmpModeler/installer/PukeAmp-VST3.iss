@@ -29,6 +29,7 @@ SolidCompression=yes
 WizardStyle=modern
 OutputDir=..\build-vst3\windows
 OutputBaseFilename={#ArtifactBaseName}
+LicenseFile=..\..\LicenseText.rtf
 SetupLogging=yes
 UninstallDisplayName={#PluginName} VST3
 

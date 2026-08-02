@@ -1,6 +1,6 @@
 # Installer Identity
 
-The checked-in Windows installer uses the Neural Amp Modeler product metadata. Before publishing a pre-built installer from a private release fork, replace `license.rtf` with the product's real license and override the installer identity if needed.
+Both installer build paths use the repository-root `LicenseText.rtf` for their click-through license agreement. Before publishing a pre-built installer from a private release fork, replace that file with the product's real license and override the installer identity if needed.
 
 The Windows distribution script calls `scripts/update_installer-win.py`, which accepts these environment variable overrides:
 
